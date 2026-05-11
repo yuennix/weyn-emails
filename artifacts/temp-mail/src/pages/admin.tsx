@@ -192,7 +192,11 @@ function DomainsPanel() {
 
 function WebhookPanel() {
   const [copiedPayload, setCopiedPayload] = useState(false);
-  const webhookUrl = `${window.location.origin}/api/webhook/email`;
+  const webhookUrl = import.meta.env.VITE_PUBLIC_URL
+    ? `${import.meta.env.VITE_PUBLIC_URL}/api/webhook/email`
+    : __REPLIT_DEV_DOMAIN__
+      ? `https://${__REPLIT_DEV_DOMAIN__}/api/webhook/email`
+      : `${window.location.origin}/api/webhook/email`;
 
   return (
     <div className="space-y-4">

@@ -91,7 +91,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 space-y-1.5">
                 <p className="text-xs text-white/25 font-mono">Webhook endpoint</p>
                 <code className="text-[11px] text-violet-400 font-mono break-all">
-                  {window.location.origin}/api/webhook/email
+                  {import.meta.env.VITE_PUBLIC_URL
+                    ? `${import.meta.env.VITE_PUBLIC_URL}/api/webhook/email`
+                    : __REPLIT_DEV_DOMAIN__
+                      ? `https://${__REPLIT_DEV_DOMAIN__}/api/webhook/email`
+                      : `${window.location.origin}/api/webhook/email`}
                 </code>
               </div>
             </div>
