@@ -8,6 +8,7 @@ import {
   MarkEmailReadParams,
   ListRecentEmailsQueryParams,
 } from "@workspace/api-zod";
+import { addWebhookLog, getWebhookLog } from "../lib/webhookLog";
 
 const router = Router();
 
@@ -167,15 +168,21 @@ router.patch("/emails/:id/read", async (req, res) => {
   res.json(formatEmail(updated, sub?.name ?? ""));
 });
 
+// GET /webhook/logs — in-memory log of recent webhook attempts
+router.get("/webhook/logs", (_req, res) => {
+  res.json(getWebhookLog());
+});
+
 // POST /webhook/email
 router.post("/webhook/email", async (req, res) => {
   const b = req.body as Record<string, unknown>;
+  const receivedKeys = Object.keys(b);
 
   // Normalize field names — accept every common variation email providers use
   const from =
     (b.from ?? b.From ?? b.sender ?? b.Sender ?? b.from_address ?? b.fromAddress ?? "") as string;
   const to =
-    (b.to ?? b.To ?? b.recipient ?? b.Recipient ?? b.to_address ?? b.toAddress ?? b.envelope_to ?? b.envelope?.to ?? "") as string;
+    (b.to ?? b.To ?? b.recipient ?? b.Recipient ?? b.to_address ?? b.toAddress ?? b.envelope_to ?? (b.envelope as any)?.to ?? "") as string;
   const subject =
     (b.subject ?? b.Subject ?? b.title ?? "") as string;
   const bodyText =
@@ -183,14 +190,16 @@ router.post("/webhook/email", async (req, res) => {
   const bodyHtml =
     (b.bodyHtml ?? b.body_html ?? b.html ?? b["body-html"] ?? b.strippedHtml ?? b.stripped_html ?? null) as string | null;
 
-  // Log raw payload so admins can debug mismatches
   req.log.info({ rawWebhookBody: b, normalized: { from, to, subject } }, "webhook received");
 
   if (!from || !to) {
-    req.log.warn({ body: b }, "webhook rejected — missing from or to");
-    res.status(400).json({ error: "Missing required fields: from and to. Received keys: " + Object.keys(b).join(", ") });
+    const msg = "Missing required fields: from and to. Received keys: " + receivedKeys.join(", ");
+    req.log.warn({ body: b }, "webhook rejected — " + msg);
+    addWebhookLog({ status: "rejected", from, to, subject, statusCode: 400, message: msg, receivedKeys });
+    res.status(400).json({ error: msg });
     return;
   }
+
   const toLower = to.toLowerCase();
   const toDomain = toLower.split("@")[1] ?? "";
   const toLocal = toLower.split("@")[0] ?? "";
@@ -211,13 +220,14 @@ router.post("/webhook/email", async (req, res) => {
     (s) => toDomain === s.name.toLowerCase() || toDomain.endsWith(`.${s.name.toLowerCase()}`),
   );
 
-  // Fallback: match by full name
   if (!matchedSub && matchedAddress) {
     matchedSub = allSubdomains.find((s) => s.id === matchedAddress.subdomainId);
   }
 
   if (!matchedSub) {
-    res.status(404).json({ error: `No subdomain registered for: ${to}` });
+    const msg = `No subdomain registered for: ${to}`;
+    addWebhookLog({ status: "no_domain", from, to, subject, statusCode: 404, message: msg, receivedKeys });
+    res.status(404).json({ error: msg });
     return;
   }
 
@@ -235,6 +245,7 @@ router.post("/webhook/email", async (req, res) => {
     })
     .returning();
 
+  addWebhookLog({ status: "success", from, to, subject, statusCode: 200, message: "Email saved", receivedKeys });
   res.json(formatEmail(inserted, matchedSub.name));
 });
 
