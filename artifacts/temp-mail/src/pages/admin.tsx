@@ -190,6 +190,30 @@ function DomainsPanel() {
   );
 }
 
+function WebhookEndpointBar() {
+  const [copied, setCopied] = useState(false);
+  const webhookUrl = import.meta.env.VITE_PUBLIC_URL
+    ? `${import.meta.env.VITE_PUBLIC_URL}/api/webhook/email`
+    : __REPLIT_DEV_DOMAIN__
+      ? `https://${__REPLIT_DEV_DOMAIN__}/api/webhook/email`
+      : `${window.location.origin}/api/webhook/email`;
+
+  return (
+    <div className="rounded-2xl border border-violet-500/20 bg-violet-600/5 px-4 py-3">
+      <p className="font-mono text-[10px] text-violet-400/60 uppercase tracking-wider mb-1.5">Webhook endpoint</p>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 font-mono text-xs text-violet-300 break-all">{webhookUrl}</code>
+        <button
+          onClick={() => { navigator.clipboard.writeText(webhookUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+          className="shrink-0 p-1.5 rounded-lg hover:bg-violet-500/10 text-violet-400/50 hover:text-violet-400 transition-colors"
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-violet-400" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function WebhookPanel() {
   const [copiedPayload, setCopiedPayload] = useState(false);
   const webhookUrl = import.meta.env.VITE_PUBLIC_URL
@@ -326,6 +350,9 @@ export default function AdminPage() {
           Sign out
         </button>
       </div>
+
+      {/* Webhook endpoint — always visible */}
+      <WebhookEndpointBar />
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-[#13112a] rounded-2xl border border-white/5">
