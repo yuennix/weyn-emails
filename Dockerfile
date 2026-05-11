@@ -14,6 +14,9 @@ RUN pnpm install --no-frozen-lockfile
 
 COPY . .
 
+ARG VITE_PUBLIC_URL
+ENV VITE_PUBLIC_URL=$VITE_PUBLIC_URL
+
 RUN pnpm run build:railway
 
 EXPOSE 3000
