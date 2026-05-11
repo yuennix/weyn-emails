@@ -21,80 +21,17 @@ interface EmailData {
   headers?: Record<string, string>[];
 }
 
-/** Parse raw MIME email text into EmailData (handles From/To/Subject headers + body) */
-function parseMimeEmail(raw: string): EmailData | null {
-  // Normalize line endings: CRLF (\r\n) and CR (\r) → LF (\n)
-  const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-  // Split headers from body at the first blank line
-  const blankLine = normalized.indexOf("\n\n");
-  const headerBlock = blankLine !== -1 ? normalized.slice(0, blankLine) : normalized;
-  const bodyBlock   = blankLine !== -1 ? normalized.slice(blankLine + 2).trim() : "";
-
-  const getHeader = (name: string): string | undefined => {
-    // Headers can be folded (continuation lines start with whitespace)
-    const re = new RegExp(`^${name}:\\s*([\\s\\S]*?)(?=\\n[^\\s]|$)`, "im");
-    const m = headerBlock.match(re);
-    return m ? m[1].replace(/\n\s+/g, " ").trim() : undefined;
-  };
-
-  const from    = getHeader("From");
-  const to      = getHeader("To") ?? getHeader("Delivered-To") ?? getHeader("X-Original-To") ?? getHeader("X-Forwarded-To");
-  const subject = getHeader("Subject");
-
-  // We need at least one address to be useful
-  if (!from && !to) return null;
-
-  // Handle multipart MIME bodies — extract text/html or text/plain parts
-  let finalBody = bodyBlock;
-  const contentType = getHeader("Content-Type") ?? "";
-  const boundaryMatch = contentType.match(/boundary=["']?([^"';\s]+)/i);
-  if (boundaryMatch) {
-    const boundary = boundaryMatch[1];
-    const parts = normalized.split(new RegExp(`--${boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--)?`));
-    let htmlPart = "";
-    let textPart = "";
-    for (const part of parts) {
-      const partBlank = part.indexOf("\n\n");
-      if (partBlank === -1) continue;
-      const partHeaders = part.slice(0, partBlank);
-      const partBody = part.slice(partBlank + 2).trim();
-      const partCT = (partHeaders.match(/^Content-Type:\s*([^\s;]+)/im)?.[1] ?? "").toLowerCase();
-      if (partCT === "text/html" && !htmlPart) htmlPart = partBody;
-      else if (partCT === "text/plain" && !textPart) textPart = partBody;
-    }
-    if (htmlPart) finalBody = htmlPart;
-    else if (textPart) finalBody = textPart;
-  }
-
-  const isHtml = /<[a-z][\s\S]*>/i.test(finalBody);
-  return {
-    from,
-    to,
-    subject,
-    ...(isHtml ? { html: finalBody } : { text: finalBody }),
-    body: finalBody,
-  };
-}
-
 function extractEmailData(body: Record<string, unknown>, files: Express.Multer.File[]): EmailData | null {
-  // Format 1a: body.email is a JSON string (original Hanami.run JSON format)
+  // Format 1: body.email is a JSON string (Mailwip / Hanami.run format)
   if (typeof body.email === "string") {
     try {
-      const parsed = JSON.parse(body.email) as EmailData;
-      if (parsed && typeof parsed === "object") return parsed;
+      return JSON.parse(body.email) as EmailData;
     } catch {
-      // Not JSON — fall through to Format 1b
+      logger.warn("Failed to parse body.email as JSON");
     }
-
-    // Format 1b: body.email is a raw MIME email string
-    const mimeData = parseMimeEmail(body.email);
-    if (mimeData) return mimeData;
-
-    logger.warn("body.email present but could not parse as JSON or MIME");
   }
 
-  // Format 2: body has email fields directly (JSON body from custom senders)
+  // Format 2: body has email fields directly as JSON body
   if (body.from || body.to || body.recipient || body.sender) {
     return body as EmailData;
   }
@@ -113,11 +50,14 @@ function extractEmailData(body: Record<string, unknown>, files: Express.Multer.F
     return body.data as EmailData;
   }
 
-  // Format 5: multipart form-data files (some services attach the raw email as a file)
+  // Format 5: multipart file named "email"
   const emailFile = files.find(f => f.fieldname === "email" || f.mimetype?.startsWith("message/"));
   if (emailFile) {
-    const raw = emailFile.buffer.toString("utf8");
-    return parseMimeEmail(raw);
+    try {
+      return JSON.parse(emailFile.buffer.toString("utf8")) as EmailData;
+    } catch {
+      logger.warn("Failed to parse email file as JSON");
+    }
   }
 
   return null;
@@ -128,7 +68,6 @@ router.post(
   upload.any(),
   async (req, res): Promise<void> => {
     try {
-      // Log full request for debugging
       logger.info({
         contentType: req.headers["content-type"],
         bodyKeys: Object.keys(req.body || {}),
@@ -150,16 +89,14 @@ router.post(
           contentType: req.headers["content-type"] ?? "",
           receivedKeys,
           status: 400,
-          error: `Missing required fields: from and to. Received keys: ${keyList}`,
+          error: `Could not parse email data. Received keys: ${keyList}`,
           parsedFrom: null,
           parsedTo: null,
           parsedSubject: null,
           emailId: null,
           bodyPreview,
         });
-        res.status(400).json({
-          error: `Missing required fields: from and to. Received keys: ${keyList}`,
-        });
+        res.status(400).json({ error: `Could not parse email data. Received keys: ${keyList}` });
         return;
       }
 
@@ -259,38 +196,9 @@ router.post(
 
 // Clerk user.created webhook — configure in Clerk Dashboard → Webhooks
 // Endpoint: POST /api/webhook/clerk
-// Requires CLERK_WEBHOOK_SECRET to be set (Svix signing secret from Clerk dashboard)
 router.post("/webhook/clerk", async (req, res): Promise<void> => {
-  const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    logger.error("CLERK_WEBHOOK_SECRET is not configured — rejecting webhook");
-    res.status(500).json({ error: "Webhook secret is not configured" });
-    return;
-  }
-
-  // Verify Svix signature
-  const svixId = req.headers["svix-id"] as string | undefined;
-  const svixTimestamp = req.headers["svix-timestamp"] as string | undefined;
-  const svixSignature = req.headers["svix-signature"] as string | undefined;
-
-  if (!svixId || !svixTimestamp || !svixSignature) {
-    res.status(400).json({ error: "Missing Svix headers" });
-    return;
-  }
-
   try {
-    const { Webhook } = await import("svix");
-    const wh = new Webhook(webhookSecret);
-
-    // Use the raw request body buffer for signature verification (re-stringifying parsed JSON is fragile)
-    const payload = req.rawBody?.toString("utf8") ?? JSON.stringify(req.body);
-
-    const event = wh.verify(payload, {
-      "svix-id": svixId,
-      "svix-timestamp": svixTimestamp,
-      "svix-signature": svixSignature,
-    }) as { type?: string; data?: { id?: string; email_addresses?: { email_address: string }[]; username?: string } };
-
+    const event = req.body as { type?: string; data?: { id?: string; email_addresses?: { email_address: string }[]; username?: string } };
     if (event.type !== "user.created" && event.type !== "user.updated") {
       res.json({ ok: true, skipped: true });
       return;
@@ -332,8 +240,8 @@ router.post("/webhook/clerk", async (req, res): Promise<void> => {
     logger.info({ clerkId, email }, "User created via Clerk webhook");
     res.json({ ok: true, action: "created" });
   } catch (err) {
-    logger.error({ err }, "Clerk webhook error or signature verification failed");
-    res.status(400).json({ error: "Webhook verification failed" });
+    logger.error({ err }, "Clerk webhook error");
+    res.status(500).json({ error: "Internal error" });
   }
 });
 
