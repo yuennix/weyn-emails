@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Shield, User, RefreshCw, Users, Eye, EyeOff, Trash2, UserPlus, ChevronDown, ChevronUp, Globe, Lock } from "lucide-react";
+import { Shield, User, RefreshCw, Users, Eye, EyeOff, Trash2, UserPlus, ChevronDown, ChevronUp, Globe, Lock, Send, FlaskConical, CheckCircle2 } from "lucide-react";
 import { DomainsPage } from "@/pages/domains";
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL as string) || "";
@@ -37,7 +37,14 @@ export function AdminPage() {
   const [allDomains, setAllDomains] = useState<{ id: number; name: string }[]>([]);
   const [togglingDomain, setTogglingDomain] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"users" | "domains">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "domains" | "test">("users");
+
+  const [testTo, setTestTo] = useState("");
+  const [testFrom, setTestFrom] = useState("noreply@weyn-admin.local");
+  const [testSubject, setTestSubject] = useState("Test Email");
+  const [testBody, setTestBody] = useState("This is a test email sent from the admin panel.");
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const storedPassword = (): string => sessionStorage.getItem(SESSION_KEY) ?? "";
 
@@ -191,6 +198,32 @@ export function AdminPage() {
     }
   };
 
+  const sendTestEmail = async () => {
+    if (!testTo.includes("@")) {
+      setTestResult({ ok: false, msg: "Enter a valid To address." });
+      return;
+    }
+    setTestSending(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`${apiBase}/api/admin/test-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": storedPassword() },
+        body: JSON.stringify({ to: testTo, from: testFrom, subject: testSubject, body: testBody }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestResult({ ok: true, msg: `Delivered to ${testTo} (ID: ${data.emailId})` });
+      } else {
+        setTestResult({ ok: false, msg: data.error ?? "Failed to send." });
+      }
+    } catch {
+      setTestResult({ ok: false, msg: "Could not reach server." });
+    } finally {
+      setTestSending(false);
+    }
+  };
+
   const handleSignOut = () => {
     sessionStorage.removeItem(SESSION_KEY);
     setAuthenticated(false);
@@ -293,6 +326,17 @@ export function AdminPage() {
         >
           <Globe className="w-4 h-4" />
           Domains
+        </button>
+        <button
+          onClick={() => setActiveTab("test")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+            activeTab === "test"
+              ? "border-violet-600 text-violet-600 dark:text-violet-400"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <FlaskConical className="w-4 h-4" />
+          Test Email
         </button>
         {activeTab === "users" && (
           <div className="ml-auto pb-1">
@@ -457,6 +501,87 @@ export function AdminPage() {
 
       {/* ── DOMAINS TAB ── */}
       {activeTab === "domains" && <DomainsPage />}
+
+      {/* ── TEST EMAIL TAB ── */}
+      {activeTab === "test" && (
+        <div className="space-y-4 max-w-xl">
+          <div className="rounded-xl border border-border bg-card shadow-sm p-5 space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground mb-0.5">Send a test email</p>
+              <p className="text-xs text-muted-foreground">
+                Inject an email directly into any inbox — useful for testing webhooks and the live inbox view.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">To</label>
+                <Input
+                  placeholder="hello@yourdomain.com"
+                  value={testTo}
+                  onChange={(e) => { setTestTo(e.target.value); setTestResult(null); }}
+                  className="h-10 font-mono text-sm"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">From</label>
+                <Input
+                  placeholder="noreply@weyn-admin.local"
+                  value={testFrom}
+                  onChange={(e) => setTestFrom(e.target.value)}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Subject</label>
+                <Input
+                  placeholder="Test Email"
+                  value={testSubject}
+                  onChange={(e) => setTestSubject(e.target.value)}
+                  className="h-10 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Body</label>
+                <textarea
+                  className="w-full rounded-md border border-input bg-background text-sm p-2.5 resize-y min-h-[100px] focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  placeholder="Email body (plain text or HTML)"
+                  value={testBody}
+                  onChange={(e) => setTestBody(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {testResult && (
+              <div className={`flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm font-medium ${
+                testResult.ok
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+                  : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
+              }`}>
+                {testResult.ok
+                  ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                  : <span className="shrink-0 mt-0.5">✗</span>}
+                {testResult.msg}
+              </div>
+            )}
+
+            <Button
+              className="w-full h-11 bg-violet-600 hover:bg-violet-700 text-white"
+              onClick={sendTestEmail}
+              disabled={testSending || !testTo}
+            >
+              {testSending
+                ? <><RefreshCw className="w-4 h-4 animate-spin mr-2" />Sending…</>
+                : <><Send className="w-4 h-4 mr-2" />Send Test Email</>}
+            </Button>
+          </div>
+
+          <p className="text-xs text-muted-foreground px-1">
+            The email will appear instantly in the inbox at the To address above. If the domain doesn't exist yet it will be auto-created.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
