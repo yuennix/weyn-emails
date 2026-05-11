@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, usersTable, domainsTable, userDomainAssignmentsTable } from "@workspace/db";
 import { eq, count, and } from "drizzle-orm";
 import { requireAdmin as checkAdminPassword } from "../middlewares/requireAdmin";
+import { getWebhookLogs } from "../lib/webhookLog";
 
 const router: IRouter = Router();
 
@@ -141,6 +142,10 @@ router.delete("/admin/users/:id/domains/:domainId", checkAdminPassword, async (r
     .delete(userDomainAssignmentsTable)
     .where(and(eq(userDomainAssignmentsTable.userId, userId), eq(userDomainAssignmentsTable.domainId, domainId)));
   res.json({ ok: true });
+});
+
+router.get("/admin/webhook-logs", checkAdminPassword, (_req, res): void => {
+  res.json({ logs: getWebhookLogs() });
 });
 
 export default router;

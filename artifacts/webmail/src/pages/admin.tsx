@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Shield, User, RefreshCw, Users, Eye, EyeOff, Trash2, UserPlus, ChevronDown, ChevronUp, Globe, Lock, Send, FlaskConical, CheckCircle2 } from "lucide-react";
+import { Shield, User, RefreshCw, Users, Eye, EyeOff, Trash2, UserPlus, ChevronDown, ChevronUp, Globe, Lock, Send, FlaskConical, CheckCircle2, ScrollText, CircleCheck, CircleX } from "lucide-react";
 import { DomainsPage } from "@/pages/domains";
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL as string) || "";
@@ -37,7 +37,7 @@ export function AdminPage() {
   const [allDomains, setAllDomains] = useState<{ id: number; name: string }[]>([]);
   const [togglingDomain, setTogglingDomain] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"users" | "domains" | "test">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "domains" | "test" | "logs">("users");
 
   const [testTo, setTestTo] = useState("");
   const [testFrom, setTestFrom] = useState("noreply@weyn-admin.local");
@@ -45,6 +45,23 @@ export function AdminPage() {
   const [testBody, setTestBody] = useState("This is a test email sent from the admin panel.");
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  interface WebhookLog {
+    id: number;
+    timestamp: string;
+    contentType: string;
+    receivedKeys: string[];
+    status: number;
+    error: string | null;
+    parsedFrom: string | null;
+    parsedTo: string | null;
+    parsedSubject: string | null;
+    emailId: number | null;
+    bodyPreview: string;
+  }
+  const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [expandedLog, setExpandedLog] = useState<number | null>(null);
 
   const storedPassword = (): string => sessionStorage.getItem(SESSION_KEY) ?? "";
 
@@ -198,6 +215,19 @@ export function AdminPage() {
     }
   };
 
+  const fetchWebhookLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/api/admin/webhook-logs?t=${Date.now()}`, {
+        headers: { "x-admin-password": storedPassword(), "Cache-Control": "no-cache" },
+      });
+      const data = await res.json();
+      setWebhookLogs(data.logs ?? []);
+    } catch { /* ignore */ } finally {
+      setLogsLoading(false);
+    }
+  };
+
   const sendTestEmail = async () => {
     if (!testTo.includes("@")) {
       setTestResult({ ok: false, msg: "Enter a valid To address." });
@@ -337,6 +367,17 @@ export function AdminPage() {
         >
           <FlaskConical className="w-4 h-4" />
           Test Email
+        </button>
+        <button
+          onClick={() => { setActiveTab("logs"); fetchWebhookLogs(); }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+            activeTab === "logs"
+              ? "border-violet-600 text-violet-600 dark:text-violet-400"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <ScrollText className="w-4 h-4" />
+          Webhook Logs
         </button>
         {activeTab === "users" && (
           <div className="ml-auto pb-1">
@@ -501,6 +542,103 @@ export function AdminPage() {
 
       {/* ── DOMAINS TAB ── */}
       {activeTab === "domains" && <DomainsPage />}
+
+      {/* ── WEBHOOK LOGS TAB ── */}
+      {activeTab === "logs" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Last {webhookLogs.length} webhook attempts (resets on server restart)
+            </p>
+            <Button variant="outline" size="sm" onClick={fetchWebhookLogs} disabled={logsLoading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${logsLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
+
+          {logsLoading && webhookLogs.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
+              Loading…
+            </div>
+          ) : webhookLogs.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-10 text-center">
+              <ScrollText className="w-8 h-8 text-muted-foreground/25 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-muted-foreground">No webhook attempts yet</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Requests to /api/webhook/email will appear here</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+              <div className="divide-y divide-border">
+                {webhookLogs.map((log) => {
+                  const ok = log.status === 200;
+                  const expanded = expandedLog === log.id;
+                  return (
+                    <div key={log.id}>
+                      <button
+                        className="w-full text-left px-4 py-3 hover:bg-muted/30 transition-colors flex items-start gap-3"
+                        onClick={() => setExpandedLog(expanded ? null : log.id)}
+                      >
+                        <div className="shrink-0 mt-0.5">
+                          {ok
+                            ? <CircleCheck className="w-4 h-4 text-emerald-500" />
+                            : <CircleX className="w-4 h-4 text-red-400" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${ok ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400"}`}>
+                              {log.status}
+                            </span>
+                            <span className="text-xs font-mono text-foreground truncate">
+                              {ok ? `→ ${log.parsedTo}` : log.error}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(log.timestamp).toLocaleString()}
+                            </span>
+                            {log.contentType && (
+                              <span className="text-[10px] text-muted-foreground font-mono truncate">
+                                {log.contentType.split(";")[0]}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground shrink-0 mt-1">
+                          {expanded ? "▲" : "▼"}
+                        </span>
+                      </button>
+
+                      {expanded && (
+                        <div className="px-4 pb-4 pt-0 bg-muted/20 space-y-2 text-xs font-mono">
+                          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                            {log.parsedFrom && <><span className="text-muted-foreground">From</span><span className="truncate">{log.parsedFrom}</span></>}
+                            {log.parsedTo && <><span className="text-muted-foreground">To</span><span className="truncate">{log.parsedTo}</span></>}
+                            {log.parsedSubject && <><span className="text-muted-foreground">Subject</span><span className="truncate">{log.parsedSubject}</span></>}
+                            {log.emailId && <><span className="text-muted-foreground">Email ID</span><span>#{log.emailId}</span></>}
+                            <span className="text-muted-foreground">Keys</span>
+                            <span>{log.receivedKeys.join(", ") || "(none)"}</span>
+                          </div>
+                          {log.bodyPreview && (
+                            <div className="mt-2">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Payload preview</p>
+                              <pre className="bg-background rounded p-2 text-[10px] overflow-auto max-h-24 whitespace-pre-wrap break-all border border-border">
+                                {log.bodyPreview}
+                              </pre>
+                            </div>
+                          )}
+                          {log.error && (
+                            <p className="text-red-500 dark:text-red-400">{log.error}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── TEST EMAIL TAB ── */}
       {activeTab === "test" && (

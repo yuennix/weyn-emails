@@ -4,6 +4,7 @@ import { db, emailsTable, domainsTable, usersTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { broadcastNewEmail } from "../lib/sse";
+import { addWebhookLog } from "../lib/webhookLog";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -111,13 +112,28 @@ router.post(
       }, "Webhook received");
 
       const files = (req.files as Express.Multer.File[]) ?? [];
+      const receivedKeys = Object.keys(req.body || {});
+      const bodyPreview = JSON.stringify(req.body).slice(0, 300);
       const emailData = extractEmailData(req.body as Record<string, unknown>, files);
 
       if (!emailData) {
-        const receivedKeys = Object.keys(req.body || {}).join(", ") || "(none)";
+        const keyList = receivedKeys.join(", ") || "(none)";
         logger.warn({ body: req.body }, "Could not extract email data from webhook");
+        addWebhookLog({
+          timestamp: new Date().toISOString(),
+          method: req.method,
+          contentType: req.headers["content-type"] ?? "",
+          receivedKeys,
+          status: 400,
+          error: `Missing required fields: from and to. Received keys: ${keyList}`,
+          parsedFrom: null,
+          parsedTo: null,
+          parsedSubject: null,
+          emailId: null,
+          bodyPreview,
+        });
         res.status(400).json({
-          error: `Missing required fields: from and to. Received keys: ${receivedKeys}`,
+          error: `Missing required fields: from and to. Received keys: ${keyList}`,
         });
         return;
       }
@@ -129,6 +145,19 @@ router.post(
 
       if (!toAddress) {
         logger.warn("Webhook received with empty to address");
+        addWebhookLog({
+          timestamp: new Date().toISOString(),
+          method: req.method,
+          contentType: req.headers["content-type"] ?? "",
+          receivedKeys,
+          status: 400,
+          error: "Missing to address",
+          parsedFrom: fromAddress,
+          parsedTo: null,
+          parsedSubject: subject,
+          emailId: null,
+          bodyPreview,
+        });
         res.status(400).json({ error: "Missing to address" });
         return;
       }
@@ -180,6 +209,20 @@ router.post(
       );
 
       broadcastNewEmail(toAddress, inserted.id);
+
+      addWebhookLog({
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        contentType: req.headers["content-type"] ?? "",
+        receivedKeys,
+        status: 200,
+        error: null,
+        parsedFrom: fromAddress,
+        parsedTo: toAddress,
+        parsedSubject: subject,
+        emailId: inserted.id,
+        bodyPreview,
+      });
 
       res.status(200).json({ status: "ok", emailId: inserted.id });
     } catch (err) {

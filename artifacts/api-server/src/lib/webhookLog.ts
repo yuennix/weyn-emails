@@ -1,27 +1,27 @@
-export type WebhookLogEntry = {
-  id: string;
+export interface WebhookLogEntry {
+  id: number;
   timestamp: string;
-  status: "success" | "rejected" | "error" | "no_domain";
-  from: string;
-  to: string;
-  subject: string;
-  statusCode: number;
-  message: string;
+  method: string;
+  contentType: string;
   receivedKeys: string[];
-};
+  status: number;
+  error: string | null;
+  parsedFrom: string | null;
+  parsedTo: string | null;
+  parsedSubject: string | null;
+  emailId: number | null;
+  bodyPreview: string;
+}
 
-const MAX_ENTRIES = 30;
+const MAX_ENTRIES = 50;
+let seq = 0;
 const log: WebhookLogEntry[] = [];
 
-export function addWebhookLog(entry: Omit<WebhookLogEntry, "id" | "timestamp">) {
-  log.unshift({
-    id: Math.random().toString(36).slice(2),
-    timestamp: new Date().toISOString(),
-    ...entry,
-  });
+export function addWebhookLog(entry: Omit<WebhookLogEntry, "id">): void {
+  log.unshift({ id: ++seq, ...entry });
   if (log.length > MAX_ENTRIES) log.splice(MAX_ENTRIES);
 }
 
-export function getWebhookLog(): WebhookLogEntry[] {
+export function getWebhookLogs(): WebhookLogEntry[] {
   return log;
 }
