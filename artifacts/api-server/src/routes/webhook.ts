@@ -23,32 +23,57 @@ interface EmailData {
 
 /** Parse raw MIME email text into EmailData (handles From/To/Subject headers + body) */
 function parseMimeEmail(raw: string): EmailData | null {
+  // Normalize line endings: CRLF (\r\n) and CR (\r) → LF (\n)
+  const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
   // Split headers from body at the first blank line
-  const blankLine = raw.indexOf("\n\n");
-  const headerBlock = blankLine !== -1 ? raw.slice(0, blankLine) : raw;
-  const bodyBlock   = blankLine !== -1 ? raw.slice(blankLine + 2).trim() : "";
+  const blankLine = normalized.indexOf("\n\n");
+  const headerBlock = blankLine !== -1 ? normalized.slice(0, blankLine) : normalized;
+  const bodyBlock   = blankLine !== -1 ? normalized.slice(blankLine + 2).trim() : "";
 
   const getHeader = (name: string): string | undefined => {
     // Headers can be folded (continuation lines start with whitespace)
     const re = new RegExp(`^${name}:\\s*([\\s\\S]*?)(?=\\n[^\\s]|$)`, "im");
     const m = headerBlock.match(re);
-    return m ? m[1].replace(/\r?\n\s+/g, " ").trim() : undefined;
+    return m ? m[1].replace(/\n\s+/g, " ").trim() : undefined;
   };
 
   const from    = getHeader("From");
-  const to      = getHeader("To") ?? getHeader("Delivered-To");
+  const to      = getHeader("To") ?? getHeader("Delivered-To") ?? getHeader("X-Original-To") ?? getHeader("X-Forwarded-To");
   const subject = getHeader("Subject");
 
   // We need at least one address to be useful
   if (!from && !to) return null;
 
-  const isHtml = /<[a-z][\s\S]*>/i.test(bodyBlock);
+  // Handle multipart MIME bodies — extract text/html or text/plain parts
+  let finalBody = bodyBlock;
+  const contentType = getHeader("Content-Type") ?? "";
+  const boundaryMatch = contentType.match(/boundary=["']?([^"';\s]+)/i);
+  if (boundaryMatch) {
+    const boundary = boundaryMatch[1];
+    const parts = normalized.split(new RegExp(`--${boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--)?`));
+    let htmlPart = "";
+    let textPart = "";
+    for (const part of parts) {
+      const partBlank = part.indexOf("\n\n");
+      if (partBlank === -1) continue;
+      const partHeaders = part.slice(0, partBlank);
+      const partBody = part.slice(partBlank + 2).trim();
+      const partCT = (partHeaders.match(/^Content-Type:\s*([^\s;]+)/im)?.[1] ?? "").toLowerCase();
+      if (partCT === "text/html" && !htmlPart) htmlPart = partBody;
+      else if (partCT === "text/plain" && !textPart) textPart = partBody;
+    }
+    if (htmlPart) finalBody = htmlPart;
+    else if (textPart) finalBody = textPart;
+  }
+
+  const isHtml = /<[a-z][\s\S]*>/i.test(finalBody);
   return {
     from,
     to,
     subject,
-    ...(isHtml ? { html: bodyBlock } : { text: bodyBlock }),
-    body: bodyBlock,
+    ...(isHtml ? { html: finalBody } : { text: finalBody }),
+    body: finalBody,
   };
 }
 

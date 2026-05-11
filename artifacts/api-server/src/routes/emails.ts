@@ -8,7 +8,7 @@ import {
   MarkEmailReadParams,
   ListRecentEmailsQueryParams,
 } from "@workspace/api-zod";
-import { addWebhookLog, getWebhookLog } from "../lib/webhookLog";
+import { addWebhookLog, getWebhookLogs } from "../lib/webhookLog";
 
 const router = Router();
 
@@ -170,7 +170,7 @@ router.patch("/emails/:id/read", async (req, res) => {
 
 // GET /webhook/logs — in-memory log of recent webhook attempts
 router.get("/webhook/logs", (_req, res) => {
-  res.json(getWebhookLog());
+  res.json(getWebhookLogs());
 });
 
 // POST /webhook/email
