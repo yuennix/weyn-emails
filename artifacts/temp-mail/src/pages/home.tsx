@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { ArrowRight, Shuffle, Mail } from "lucide-react";
+import { ArrowRight, Shuffle, Copy, Check, Mail, Shield, Zap, RefreshCw } from "lucide-react";
 import { useListSubdomains, getListSubdomainsQueryKey } from "@workspace/api-client-react";
-import { ChevronDown } from "lucide-react";
 
-const ADJECTIVES = ["swift", "dark", "cool", "red", "blue", "quick", "lazy", "bright", "wild", "bold"];
+const ADJECTIVES = ["swift", "dark", "cool", "bold", "quick", "lazy", "bright", "wild", "silent", "sharp"];
 const NOUNS = ["fox", "bear", "hawk", "wolf", "lynx", "raven", "pike", "crane", "viper", "jade"];
 
 function randomAlias() {
@@ -14,11 +13,18 @@ function randomAlias() {
   return `${a}${n}${num}`;
 }
 
+const FEATURES = [
+  { icon: Zap, title: "Instant", desc: "No signup required. Generate an address and start receiving." },
+  { icon: Shield, title: "Private", desc: "No personal data stored. Addresses are anonymous." },
+  { icon: RefreshCw, title: "Auto-refresh", desc: "Inbox updates automatically every 15 seconds." },
+];
+
 export default function Home() {
   const [, navigate] = useLocation();
   const [alias, setAlias] = useState(randomAlias);
   const [domainId, setDomainId] = useState<number | null>(null);
   const [anyAddress, setAnyAddress] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const { data: subdomains } = useListSubdomains({ query: { queryKey: getListSubdomainsQueryKey() } });
 
@@ -29,10 +35,18 @@ export default function Home() {
   }, [subdomains, domainId]);
 
   const selectedDomain = subdomains?.find((s) => s.id === domainId);
+  const fullAddress = selectedDomain && alias.trim() ? `${alias.trim().toLowerCase()}@${selectedDomain.name}` : "";
 
   const goToInbox = () => {
-    if (!selectedDomain || !alias.trim()) return;
-    navigate(`/inbox?address=${encodeURIComponent(`${alias.trim().toLowerCase()}@${selectedDomain.name}`)}`);
+    if (!fullAddress) return;
+    navigate(`/inbox?address=${encodeURIComponent(fullAddress)}`);
+  };
+
+  const copyAddress = () => {
+    if (!fullAddress) return;
+    navigator.clipboard.writeText(fullAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const goToAnyInbox = () => {
@@ -42,106 +56,116 @@ export default function Home() {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Alias + domain picker */}
-      <div className="rounded-2xl border border-white/10 bg-[#13112a] p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          {/* Alias input */}
-          <input
-            type="text"
-            value={alias}
-            onChange={(e) => setAlias(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && goToInbox()}
-            placeholder="alias"
-            className="flex-1 min-w-0 bg-[#1e1a3a] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-mono text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-colors"
-          />
+    <div className="space-y-8">
+      {/* Page header */}
+      <div>
+        <h1 className="text-2xl font-bold text-white tracking-tight">Temporary Email</h1>
+        <p className="text-muted-foreground mt-1">Generate a disposable address — no sign-up needed.</p>
+      </div>
 
-          <span className="text-white/40 font-mono text-sm shrink-0">@</span>
-
-          {/* Domain selector */}
-          {subdomains && subdomains.length > 0 ? (
-            <div className="relative shrink-0">
+      {/* Generator card */}
+      <div className="rounded-xl border border-white/8 bg-card overflow-hidden shadow-xl shadow-black/20">
+        <div className="px-5 pt-5 pb-4 border-b border-white/5">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Your address</p>
+        </div>
+        <div className="p-5 space-y-4">
+          {/* Address builder */}
+          <div className="flex items-center gap-2 rounded-lg border border-white/8 bg-background/60 p-1 pr-2">
+            <input
+              type="text"
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && goToInbox()}
+              placeholder="alias"
+              className="flex-1 min-w-0 bg-transparent px-3 py-2 text-sm font-mono text-white placeholder:text-muted-foreground focus:outline-none"
+            />
+            <span className="text-muted-foreground font-mono text-sm shrink-0 select-none">@</span>
+            {subdomains && subdomains.length > 0 ? (
               <select
                 value={domainId ?? ""}
                 onChange={(e) => setDomainId(Number(e.target.value))}
-                className="appearance-none bg-[#1e1a3a] border border-white/10 rounded-xl pl-3 pr-8 py-2.5 text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-colors cursor-pointer max-w-[160px]"
+                className="bg-transparent font-mono text-sm text-white focus:outline-none cursor-pointer shrink-0 max-w-[140px] pr-1"
               >
                 {subdomains.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id} className="bg-[#0c1220] text-white">{s.name}</option>
                 ))}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
-                <ChevronDown className="h-3.5 w-3.5 text-white/40" />
-              </div>
+            ) : (
+              <span className="font-mono text-sm text-muted-foreground/50">no domain</span>
+            )}
+            <button
+              onClick={() => setAlias(randomAlias())}
+              title="Generate random alias"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/8 transition-colors shrink-0"
+            >
+              <Shuffle className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* Full address display */}
+          {fullAddress && (
+            <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+              <Mail className="h-4 w-4 text-primary/60 shrink-0" />
+              <span className="flex-1 font-mono text-sm text-primary truncate">{fullAddress}</span>
+              <button
+                onClick={copyAddress}
+                className="shrink-0 p-1.5 rounded-md hover:bg-primary/10 text-primary/50 hover:text-primary transition-colors"
+                title="Copy address"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
             </div>
-          ) : (
-            <span className="bg-[#1e1a3a] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-mono text-white/30 shrink-0">
-              no domains
-            </span>
           )}
 
-          {/* Go button */}
+          {/* CTA */}
           <button
             onClick={goToInbox}
-            disabled={!selectedDomain || !alias.trim()}
-            className="shrink-0 h-10 w-10 flex items-center justify-center rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            disabled={!fullAddress}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-lg shadow-primary/20 active:scale-[0.99]"
           >
-            <ArrowRight className="h-4 w-4 text-white" />
-          </button>
-
-          {/* Shuffle button */}
-          <button
-            onClick={() => setAlias(randomAlias())}
-            title="Random alias"
-            className="shrink-0 h-10 w-10 flex items-center justify-center rounded-xl border border-white/10 bg-[#1e1a3a] hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-          >
-            <Shuffle className="h-4 w-4" />
-          </button>
-        </div>
-
-        {selectedDomain && alias.trim() && (
-          <p className="font-mono text-xs text-white/40 px-1">
-            Inbox:{" "}
-            <span className="text-violet-400">{alias.trim().toLowerCase()}@{selectedDomain.name}</span>
-          </p>
-        )}
-      </div>
-
-      {/* Access any inbox */}
-      <div className="rounded-2xl border border-white/10 bg-[#13112a] p-4 space-y-3">
-        <p className="font-mono text-xs font-bold text-white/40 uppercase tracking-widest">
-          Access Any Inbox
-        </p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={anyAddress}
-            onChange={(e) => setAnyAddress(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && goToAnyInbox()}
-            placeholder={selectedDomain ? `anything@${selectedDomain.name}` : "anything@yourdomain.com"}
-            className="flex-1 min-w-0 bg-[#1e1a3a] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-mono text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-colors"
-          />
-          <button
-            onClick={goToAnyInbox}
-            disabled={!anyAddress.trim()}
-            className="shrink-0 h-10 w-10 flex items-center justify-center rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ArrowRight className="h-4 w-4 text-white" />
+            Open Inbox
+            <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {/* Empty state */}
-      <div className="rounded-2xl border border-dashed border-white/10 p-10 flex flex-col items-center justify-center text-center space-y-3">
-        <div className="h-16 w-16 rounded-2xl bg-violet-600/10 flex items-center justify-center">
-          <Mail className="h-8 w-8 text-violet-500/60" />
+      {/* Access existing inbox */}
+      <div className="rounded-xl border border-white/8 bg-card shadow-xl shadow-black/20">
+        <div className="px-5 pt-5 pb-4 border-b border-white/5">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Access existing inbox</p>
         </div>
-        <div>
-          <p className="font-semibold text-white">Pick an inbox</p>
-          <p className="text-sm text-white/40 mt-1">
-            Type any alias above and choose a domain, or enter a full email address to access its inbox.
-          </p>
+        <div className="p-5">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={anyAddress}
+              onChange={(e) => setAnyAddress(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && goToAnyInbox()}
+              placeholder={selectedDomain ? `anyone@${selectedDomain.name}` : "you@yourdomain.com"}
+              className="flex-1 min-w-0 bg-background/60 border border-white/8 rounded-lg px-3.5 py-2.5 text-sm font-mono text-white placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all"
+            />
+            <button
+              onClick={goToAnyInbox}
+              disabled={!anyAddress.trim()}
+              className="shrink-0 flex items-center justify-center h-10 w-10 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all shadow-md shadow-primary/20"
+            >
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* Features */}
+      <div className="grid grid-cols-3 gap-3">
+        {FEATURES.map(({ icon: Icon, title, desc }) => (
+          <div key={title} className="rounded-xl border border-white/6 bg-card p-4 space-y-2">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
+              <Icon className="h-4 w-4 text-primary" />
+            </div>
+            <p className="text-xs font-semibold text-white">{title}</p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">{desc}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
