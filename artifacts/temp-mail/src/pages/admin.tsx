@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useListSubdomains,
   useCreateSubdomain,
@@ -8,7 +8,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Globe, Plus, Trash2, Loader2, Eye, EyeOff,
-  Webhook, Copy, Check, Code2, Lock, Mail,
+  Webhook, Copy, Check, Code2, Lock, Mail, Activity,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -214,6 +214,77 @@ function WebhookEndpointBar() {
   );
 }
 
+type WebhookLogEntry = {
+  id: string;
+  timestamp: string;
+  status: "success" | "rejected" | "error" | "no_domain";
+  from: string;
+  to: string;
+  subject: string;
+  statusCode: number;
+  message: string;
+  receivedKeys: string[];
+};
+
+const STATUS_STYLES: Record<string, string> = {
+  success: "bg-green-600/20 text-green-400",
+  rejected: "bg-red-600/20 text-red-400",
+  no_domain: "bg-yellow-600/20 text-yellow-400",
+  error: "bg-red-600/20 text-red-400",
+};
+
+function WebhookActivityLog() {
+  const [logs, setLogs] = useState<WebhookLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchLogs = async () => {
+    try {
+      const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+      const res = await fetch(`${base}/api/webhook/logs`);
+      if (res.ok) setLogs(await res.json());
+    } catch {}
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchLogs();
+    const id = setInterval(fetchLogs, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0f0d1f] p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity className="h-4 w-4 text-violet-400" />
+          <span className="font-semibold text-white text-sm">Recent Activity</span>
+        </div>
+        <button onClick={fetchLogs} className="text-xs text-white/30 hover:text-white transition-colors">Refresh</button>
+      </div>
+      {loading ? (
+        <p className="text-xs text-white/30 py-2">Loading...</p>
+      ) : logs.length === 0 ? (
+        <p className="text-xs text-white/30 py-2">No webhook calls yet — waiting for incoming emails</p>
+      ) : (
+        <div className="space-y-2">
+          {logs.map((log) => (
+            <div key={log.id} className="rounded-xl border border-white/5 bg-[#13112a] px-3 py-2.5 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${STATUS_STYLES[log.status] ?? "bg-white/10 text-white/40"}`}>
+                  {log.status}
+                </span>
+                <span className="text-[10px] text-white/25 font-mono">{new Date(log.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <p className="text-xs text-white/50 font-mono truncate">{log.to || "(no to)"}</p>
+              <p className="text-[11px] text-white/30">{log.message}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WebhookPanel() {
   const [copiedPayload, setCopiedPayload] = useState(false);
   const webhookUrl = import.meta.env.VITE_PUBLIC_URL
@@ -271,6 +342,8 @@ function WebhookPanel() {
           <pre className="rounded-xl border border-white/10 bg-[#1e1a3a] p-3 font-mono text-xs text-white/60 whitespace-pre overflow-x-auto">{PAYLOAD}</pre>
         </div>
       </div>
+
+      <WebhookActivityLog />
     </div>
   );
 }
