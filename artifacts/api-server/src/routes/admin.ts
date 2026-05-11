@@ -1,8 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, domainsTable, userDomainAssignmentsTable, emailsTable } from "@workspace/db";
+import { db, usersTable, domainsTable, userDomainAssignmentsTable } from "@workspace/db";
 import { eq, count, and } from "drizzle-orm";
 import { requireAdmin as checkAdminPassword } from "../middlewares/requireAdmin";
-import { broadcastNewEmail } from "../lib/sse";
 
 const router: IRouter = Router();
 
@@ -142,56 +141,6 @@ router.delete("/admin/users/:id/domains/:domainId", checkAdminPassword, async (r
     .delete(userDomainAssignmentsTable)
     .where(and(eq(userDomainAssignmentsTable.userId, userId), eq(userDomainAssignmentsTable.domainId, domainId)));
   res.json({ ok: true });
-});
-
-router.post("/admin/test-email", checkAdminPassword, async (req, res): Promise<void> => {
-  const { to, from, subject, body } = req.body as {
-    to?: string;
-    from?: string;
-    subject?: string;
-    body?: string;
-  };
-
-  if (!to || !to.includes("@")) {
-    res.status(400).json({ error: "'to' address is required" });
-    return;
-  }
-
-  const toAddress = to.toLowerCase().trim();
-  const fromAddress = from?.trim() || "test@weyn-admin.local";
-  const emailSubject = subject?.trim() || "Test Email";
-  const emailBody = body?.trim() || "This is a test email sent from the admin panel.";
-
-  const toHost = toAddress.split("@")[1];
-  if (toHost) {
-    const existing = await db.select({ id: domainsTable.id }).from(domainsTable).where(eq(domainsTable.name, toHost));
-    if (existing.length === 0) {
-      await db.insert(domainsTable).values({ name: toHost, active: true });
-    }
-  }
-
-  const isHtml = /<[a-z][\s\S]*>/i.test(emailBody);
-  const preview = emailBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
-
-  const [inserted] = await db
-    .insert(emailsTable)
-    .values({
-      messageId: `test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      toAddress,
-      fromAddress,
-      subject: emailSubject,
-      htmlBody: isHtml ? emailBody : null,
-      textBody: isHtml ? null : emailBody,
-      preview,
-      read: false,
-      receivedAt: new Date(),
-      sizeBytes: Buffer.byteLength(emailBody, "utf8"),
-    })
-    .returning();
-
-  broadcastNewEmail(toAddress, inserted.id);
-
-  res.json({ ok: true, emailId: inserted.id });
 });
 
 export default router;

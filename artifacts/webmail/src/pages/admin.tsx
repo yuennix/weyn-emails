@@ -206,7 +206,7 @@ export function AdminPage() {
     setTestSending(true);
     setTestResult(null);
     try {
-      const res = await fetch(`${apiBase}/api/admin/test-email`, {
+      const res = await fetch(`${apiBase}/api/test/send-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": storedPassword() },
         body: JSON.stringify({ to: testTo, from: testFrom, subject: testSubject, body: testBody }),
