@@ -51164,15 +51164,67 @@ router3.patch("/emails/:id/read", async (req, res) => {
 router3.get("/webhook/logs", (_req, res) => {
   res.json(getWebhookLogs());
 });
+function parseMimeEmail(raw) {
+  const text2 = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const blankLine = text2.indexOf("\n\n");
+  const headerBlock = blankLine >= 0 ? text2.slice(0, blankLine) : text2;
+  const bodyBlock = blankLine >= 0 ? text2.slice(blankLine + 2).trim() : "";
+  const getHeader = (name) => {
+    const re = new RegExp(`^${name}:\\s*([\\s\\S]*?)(?=\\n[^\\s]|$)`, "im");
+    const m = headerBlock.match(re);
+    return m ? m[1].replace(/\n\s+/g, " ").trim() : "";
+  };
+  const from = getHeader("From");
+  const to = getHeader("To") || getHeader("Delivered-To") || getHeader("X-Original-To") || getHeader("X-Forwarded-To");
+  const subject = getHeader("Subject");
+  const contentType = getHeader("Content-Type");
+  const boundaryMatch = contentType.match(/boundary=["']?([^"';\s\r\n]+)/i);
+  let finalBody = bodyBlock;
+  if (boundaryMatch) {
+    const boundary = boundaryMatch[1];
+    const escaped = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const parts = text2.split(new RegExp(`--${escaped}(?:--)?
+?`));
+    let htmlPart = "", textPart = "";
+    for (const part of parts) {
+      const pb = part.indexOf("\n\n");
+      if (pb < 0) continue;
+      const ph = part.slice(0, pb);
+      const body = part.slice(pb + 2).trim();
+      const ct = (ph.match(/^Content-Type:\s*([^\s;]+)/im)?.[1] ?? "").toLowerCase();
+      if (ct === "text/html" && !htmlPart) htmlPart = body;
+      else if (ct === "text/plain" && !textPart) textPart = body;
+    }
+    finalBody = htmlPart || textPart || bodyBlock;
+  }
+  return { from, to, subject, body: finalBody };
+}
 router3.post("/webhook/email", async (req, res) => {
   const b = req.body;
   const receivedKeys = Object.keys(b);
+  req.log.info({
+    contentType: req.headers["content-type"],
+    receivedKeys,
+    bodyRaw: JSON.stringify(b).slice(0, 800)
+  }, "webhook received");
+  if (typeof b.email === "string" && b.email.length > 0) {
+    try {
+      const parsed = JSON.parse(b.email);
+      if (parsed && typeof parsed === "object") {
+        Object.assign(b, parsed);
+      }
+    } catch {
+      const mimeFields = parseMimeEmail(b.email);
+      if (mimeFields.from || mimeFields.to) {
+        Object.assign(b, mimeFields);
+      }
+    }
+  }
   const from = b.from ?? b.From ?? b.sender ?? b.Sender ?? b.from_address ?? b.fromAddress ?? "";
   const to = b.to ?? b.To ?? b.recipient ?? b.Recipient ?? b.to_address ?? b.toAddress ?? b.envelope_to ?? b.envelope?.to ?? "";
   const subject = b.subject ?? b.Subject ?? b.title ?? "";
-  const bodyText = b.bodyText ?? b.body_text ?? b.text ?? b["body-plain"] ?? b.plain ?? b.strippedText ?? b.stripped_text ?? "";
+  const bodyText = b.bodyText ?? b.body_text ?? b.text ?? b["body-plain"] ?? b.plain ?? b.strippedText ?? b.stripped_text ?? b.body ?? "";
   const bodyHtml = b.bodyHtml ?? b.body_html ?? b.html ?? b["body-html"] ?? b.strippedHtml ?? b.stripped_html ?? null;
-  req.log.info({ rawWebhookBody: b, normalized: { from, to, subject } }, "webhook received");
   if (!from || !to) {
     const msg = "Missing required fields: from and to. Received keys: " + receivedKeys.join(", ");
     req.log.warn({ body: b }, "webhook rejected \u2014 " + msg);

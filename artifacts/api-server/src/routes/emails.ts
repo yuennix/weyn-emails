@@ -173,12 +173,78 @@ router.get("/webhook/logs", (_req, res) => {
   res.json(getWebhookLogs());
 });
 
+/** Parse a raw MIME email string and extract from/to/subject/body fields */
+function parseMimeEmail(raw: string): Record<string, string> {
+  // Normalize line endings (email RFCs use CRLF; normalize to LF)
+  const text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const blankLine = text.indexOf("\n\n");
+  const headerBlock = blankLine >= 0 ? text.slice(0, blankLine) : text;
+  const bodyBlock   = blankLine >= 0 ? text.slice(blankLine + 2).trim() : "";
+
+  const getHeader = (name: string): string => {
+    const re = new RegExp(`^${name}:\\s*([\\s\\S]*?)(?=\\n[^\\s]|$)`, "im");
+    const m = headerBlock.match(re);
+    return m ? m[1].replace(/\n\s+/g, " ").trim() : "";
+  };
+
+  const from    = getHeader("From");
+  const to      = getHeader("To") || getHeader("Delivered-To") || getHeader("X-Original-To") || getHeader("X-Forwarded-To");
+  const subject = getHeader("Subject");
+
+  // Handle multipart bodies — prefer text/html, fall back to text/plain
+  const contentType = getHeader("Content-Type");
+  const boundaryMatch = contentType.match(/boundary=["']?([^"';\s\r\n]+)/i);
+  let finalBody = bodyBlock;
+  if (boundaryMatch) {
+    const boundary = boundaryMatch[1];
+    const escaped = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const parts = text.split(new RegExp(`--${escaped}(?:--)?\n?`));
+    let htmlPart = "", textPart = "";
+    for (const part of parts) {
+      const pb = part.indexOf("\n\n");
+      if (pb < 0) continue;
+      const ph = part.slice(0, pb);
+      const body = part.slice(pb + 2).trim();
+      const ct = (ph.match(/^Content-Type:\s*([^\s;]+)/im)?.[1] ?? "").toLowerCase();
+      if (ct === "text/html" && !htmlPart) htmlPart = body;
+      else if (ct === "text/plain" && !textPart) textPart = body;
+    }
+    finalBody = htmlPart || textPart || bodyBlock;
+  }
+
+  return { from, to, subject, body: finalBody };
+}
+
 // POST /webhook/email
 router.post("/webhook/email", async (req, res) => {
   const b = req.body as Record<string, unknown>;
   const receivedKeys = Object.keys(b);
 
-  // Normalize field names — accept every common variation email providers use
+  req.log.info({
+    contentType: req.headers["content-type"],
+    receivedKeys,
+    bodyRaw: JSON.stringify(b).slice(0, 800),
+  }, "webhook received");
+
+  // ── Step 1: if body has an "email" field, try to parse it ──────────────
+  // Mailwip and many other forwarders send the entire email as body.email
+  if (typeof b.email === "string" && b.email.length > 0) {
+    // Try JSON first (some services wrap fields as JSON)
+    try {
+      const parsed = JSON.parse(b.email) as Record<string, string>;
+      if (parsed && typeof parsed === "object") {
+        Object.assign(b, parsed);
+      }
+    } catch {
+      // Not JSON — treat as raw MIME email
+      const mimeFields = parseMimeEmail(b.email);
+      if (mimeFields.from || mimeFields.to) {
+        Object.assign(b, mimeFields);
+      }
+    }
+  }
+
+  // ── Step 2: normalize field names across all common provider formats ───
   const from =
     (b.from ?? b.From ?? b.sender ?? b.Sender ?? b.from_address ?? b.fromAddress ?? "") as string;
   const to =
@@ -186,11 +252,9 @@ router.post("/webhook/email", async (req, res) => {
   const subject =
     (b.subject ?? b.Subject ?? b.title ?? "") as string;
   const bodyText =
-    (b.bodyText ?? b.body_text ?? b.text ?? b["body-plain"] ?? b.plain ?? b.strippedText ?? b.stripped_text ?? "") as string;
+    (b.bodyText ?? b.body_text ?? b.text ?? b["body-plain"] ?? b.plain ?? b.strippedText ?? b.stripped_text ?? b.body ?? "") as string;
   const bodyHtml =
     (b.bodyHtml ?? b.body_html ?? b.html ?? b["body-html"] ?? b.strippedHtml ?? b.stripped_html ?? null) as string | null;
-
-  req.log.info({ rawWebhookBody: b, normalized: { from, to, subject } }, "webhook received");
 
   if (!from || !to) {
     const msg = "Missing required fields: from and to. Received keys: " + receivedKeys.join(", ");
