@@ -1,6 +1,12 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+
+const { Pool } = pg;
 
 async function main() {
   const rawPort = process.env["PORT"];
@@ -19,14 +25,10 @@ async function main() {
 
   if (process.env.DATABASE_URL) {
     try {
-      const { migrate } = await import("drizzle-orm/node-postgres/migrator");
-      const { drizzle } = await import("drizzle-orm/node-postgres");
-      const pg = await import("pg");
-      const pool = new pg.default.Pool({
-        connectionString: process.env.DATABASE_URL,
-      });
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
       const migrationDb = drizzle(pool);
-      const migrationsFolder = path.resolve(process.cwd(), "lib/db/drizzle");
+      const __dirname = path.dirname(fileURLToPath(import.meta.url));
+      const migrationsFolder = path.resolve(__dirname, "../../../lib/db/drizzle");
       await migrate(migrationDb, { migrationsFolder });
       logger.info("Database migrations applied successfully");
       await pool.end();
