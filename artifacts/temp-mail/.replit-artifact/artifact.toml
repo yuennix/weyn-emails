@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "TempMail"
+version = "1.0.0"
+id = "artifacts/temp-mail"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25653
+
+[services.development]
+run = "pnpm --filter @workspace/temp-mail run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/temp-mail", "run", "build" ]
+publicDir = "artifacts/temp-mail/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25653"
+BASE_PATH = "/"
