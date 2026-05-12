@@ -42,36 +42,37 @@
 }
 
 :root {
-  --background: 222 47% 5%;
-  --foreground: 215 25% 90%;
-  --border: 220 30% 12%;
-  --input: 220 30% 10%;
-  --ring: 231 70% 60%;
+  /* Slightly warmer, less harsh dark background */
+  --background: 224 30% 7%;
+  --foreground: 215 20% 88%;
+  --border: 220 25% 14%;
+  --input: 220 25% 11%;
+  --ring: 231 70% 62%;
 
-  --card: 222 40% 8%;
-  --card-foreground: 215 25% 90%;
+  --card: 224 28% 10%;
+  --card-foreground: 215 20% 88%;
 
-  --popover: 222 40% 9%;
-  --popover-foreground: 215 25% 90%;
+  --popover: 224 28% 11%;
+  --popover-foreground: 215 20% 88%;
 
-  --primary: 231 70% 60%;
+  --primary: 231 70% 62%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 220 30% 12%;
-  --secondary-foreground: 215 20% 75%;
+  --secondary: 220 25% 14%;
+  --secondary-foreground: 215 15% 72%;
 
-  --muted: 220 30% 12%;
-  --muted-foreground: 215 15% 45%;
+  --muted: 220 25% 14%;
+  --muted-foreground: 215 12% 48%;
 
-  --accent: 220 30% 14%;
-  --accent-foreground: 215 25% 90%;
+  --accent: 220 25% 16%;
+  --accent-foreground: 215 20% 88%;
 
-  --destructive: 0 72% 55%;
+  --destructive: 0 70% 56%;
   --destructive-foreground: 0 0% 98%;
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-mono: 'JetBrains Mono', monospace;
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
   --sidebar-w: 240px;
 }
@@ -84,13 +85,13 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--app-font-sans);
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: 15px;
+    line-height: 1.55;
   }
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: hsl(220 30% 20%); border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: hsl(220 30% 28%); }
+  ::-webkit-scrollbar-thumb { background: hsl(220 25% 22%); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(220 25% 30%); }
 }
 
 @layer utilities {
@@ -101,9 +102,9 @@
     @apply hidden;
   }
   .glass {
-    background: hsl(222 40% 9% / 0.8);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: hsl(224 30% 8% / 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
   .ring-focus {
     @apply focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50;
