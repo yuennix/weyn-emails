@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Shuffle, Copy, Check, Mail, Trash2,
-  RefreshCw, Inbox, ChevronDown, ChevronRight, ArrowRight,
+  RefreshCw, Inbox, ChevronDown, ChevronRight, ArrowRight, Zap,
 } from "lucide-react";
 import { useListSubdomains, getListSubdomainsQueryKey } from "@workspace/api-client-react";
 import { fetchInbox, markEmailRead, deleteEmail, InboxEmail } from "@/lib/api";
@@ -98,7 +98,7 @@ export default function Home() {
   useEffect(() => {
     if (!activeAddress) return;
     if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
-    autoRefreshRef.current = setInterval(() => load(activeAddress, true), 15000);
+    autoRefreshRef.current = setInterval(() => load(activeAddress, true), 5000);
     return () => { if (autoRefreshRef.current) clearInterval(autoRefreshRef.current); };
   }, [activeAddress, load]);
 
@@ -224,37 +224,42 @@ export default function Home() {
       </div>
 
       {/* ── Inbox Panel ── */}
-      {activeAddress && (
-        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xl shadow-black/20">
+      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xl shadow-black/20">
 
           {/* Inbox header */}
           <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="font-mono text-sm text-white font-semibold truncate">{activeAddress}</span>
-                <button
-                  onClick={copyAddress}
-                  className="p-1 rounded text-muted-foreground hover:text-primary transition-colors shrink-0"
-                >
-                  {copiedAddress ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{emails.length} messages</span>
-                {unreadCount > 0 && (
-                  <span className="text-primary font-semibold">{unreadCount} unread</span>
-                )}
-                {lastRefreshed && (
-                  <span className="text-muted-foreground/40 text-[11px]">
-                    updated {formatDistanceToNow(lastRefreshed, { addSuffix: true })}
-                  </span>
-                )}
-              </div>
+              {activeAddress ? (
+                <>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-mono text-sm text-white font-semibold truncate">{activeAddress}</span>
+                    <button
+                      onClick={copyAddress}
+                      className="p-1 rounded text-muted-foreground hover:text-primary transition-colors shrink-0"
+                    >
+                      {copiedAddress ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{emails.length} messages</span>
+                    {unreadCount > 0 && (
+                      <span className="text-primary font-semibold">{unreadCount} unread</span>
+                    )}
+                    {lastRefreshed && (
+                      <span className="text-muted-foreground/40 text-[11px]">
+                        updated {formatDistanceToNow(lastRefreshed, { addSuffix: true })}
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground/50">No inbox open — enter an address above</p>
+              )}
             </div>
             <button
-              onClick={() => load(activeAddress, true)}
-              disabled={refreshing}
-              className="p-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/8 transition-colors disabled:opacity-40"
+              onClick={() => activeAddress && load(activeAddress, true)}
+              disabled={!activeAddress || refreshing}
+              className="p-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/8 transition-colors disabled:opacity-30"
               title="Refresh inbox"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -291,7 +296,7 @@ export default function Home() {
               <p className="text-xs text-muted-foreground mt-1.5">Share the address above and emails will appear here</p>
               <div className="flex items-center gap-1.5 mt-4 text-[11px] text-muted-foreground/40 bg-white/3 border border-white/5 rounded-full px-3 py-1.5">
                 <RefreshCw className="h-3 w-3" />
-                Auto-refreshes every 15 seconds
+                Auto-refreshes every 5 seconds
               </div>
             </div>
           ) : (
@@ -386,11 +391,10 @@ export default function Home() {
           {emails.length > 0 && (
             <div className="flex items-center justify-center gap-2 px-5 py-3 border-t border-border bg-white/1">
               <div className="h-1.5 w-1.5 rounded-full bg-green-400/70 animate-pulse" />
-              <span className="text-[11px] text-muted-foreground/40">Auto-refreshing every 15 seconds</span>
+              <span className="text-[11px] text-muted-foreground/40">Auto-refreshing every 5 seconds</span>
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }

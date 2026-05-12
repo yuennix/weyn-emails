@@ -1,9 +1,8 @@
 import { Link, useLocation } from "wouter";
-import { Home, Globe, Settings, Zap } from "lucide-react";
+import { Home, Settings, Zap } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Inbox", icon: Home },
-  { href: "/domains", label: "Domains", icon: Globe },
   { href: "/admin", label: "Settings", icon: Settings },
 ];
 
