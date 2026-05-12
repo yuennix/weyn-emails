@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Shuffle, Copy, Check, Mail, Trash2,
-  RefreshCw, Inbox, ChevronDown, ChevronRight, ArrowRight, Zap,
+  Shuffle, Copy, Check, Trash2,
+  RefreshCw, Inbox, ChevronDown, ChevronRight, ArrowRight,
+  Mail, Sparkles,
 } from "lucide-react";
 import { useListSubdomains, getListSubdomainsQueryKey } from "@workspace/api-client-react";
 import { fetchInbox, markEmailRead, deleteEmail, InboxEmail } from "@/lib/api";
@@ -30,15 +31,19 @@ function senderName(from: string) {
   return from.split("@")[0];
 }
 
-const AVATAR_COLORS = [
-  "bg-blue-600", "bg-violet-600", "bg-emerald-600",
-  "bg-amber-600", "bg-rose-600", "bg-cyan-600",
+const AVATAR_GRADIENTS = [
+  "from-blue-500 to-indigo-600",
+  "from-violet-500 to-purple-600",
+  "from-emerald-500 to-teal-600",
+  "from-amber-500 to-orange-600",
+  "from-rose-500 to-pink-600",
+  "from-cyan-500 to-sky-600",
 ];
 
-function avatarColor(from: string) {
+function avatarGradient(from: string) {
   let h = 0;
   for (let i = 0; i < from.length; i++) h = (h * 31 + from.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+  return AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length];
 }
 
 export default function Home() {
@@ -46,7 +51,6 @@ export default function Home() {
   const [domainId, setDomainId] = useState<number | null>(null);
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [anyAddress, setAnyAddress] = useState("");
-
   const [activeAddress, setActiveAddress] = useState("");
   const [emails, setEmails] = useState<InboxEmail[]>([]);
   const [loading, setLoading] = useState(false);
@@ -103,9 +107,7 @@ export default function Home() {
   }, [activeAddress, load]);
 
   useEffect(() => {
-    if (fullAddress && !activeAddress) {
-      openInbox(fullAddress);
-    }
+    if (fullAddress && !activeAddress) openInbox(fullAddress);
   }, [fullAddress]);
 
   const handleSelect = async (email: InboxEmail) => {
@@ -137,264 +139,277 @@ export default function Home() {
     <div className="space-y-4">
 
       {/* ── Address Generator Card ── */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xl shadow-black/20">
-        {/* Header label */}
-        <div className="px-5 pt-5 pb-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Your Temporary Email</p>
+      <div className="relative rounded-2xl overflow-hidden">
+        {/* Gradient border effect */}
+        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-indigo-500/30 via-violet-500/15 to-transparent p-px">
+          <div className="h-full w-full rounded-2xl bg-card" />
+        </div>
 
-          {/* Alias + domain builder */}
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-background/60 px-4 py-3 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-            <input
-              type="text"
-              value={alias}
-              onChange={(e) => setAlias(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && openInbox(fullAddress)}
-              placeholder="alias"
-              className="flex-1 min-w-0 bg-transparent text-base font-mono text-white placeholder:text-muted-foreground focus:outline-none"
-            />
-            <span className="text-muted-foreground font-mono text-sm shrink-0 select-none">@</span>
-            {subdomains && subdomains.length > 0 ? (
-              <select
-                value={domainId ?? ""}
-                onChange={(e) => setDomainId(Number(e.target.value))}
-                className="bg-transparent font-mono text-sm text-white focus:outline-none cursor-pointer shrink-0 max-w-[140px]"
+        {/* Top glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
+
+        <div className="relative">
+          {/* Header */}
+          <div className="px-5 pt-5 pb-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+              <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Your Temporary Email</p>
+            </div>
+
+            {/* Alias + domain row */}
+            <div className="flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-950/30 px-4 py-3 focus-within:border-indigo-500/50 focus-within:bg-indigo-950/40 transition-all">
+              <input
+                type="text"
+                value={alias}
+                onChange={(e) => setAlias(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && openInbox(fullAddress)}
+                placeholder="alias"
+                className="flex-1 min-w-0 bg-transparent text-base font-mono font-semibold text-white placeholder:text-muted-foreground focus:outline-none"
+              />
+              <span className="text-indigo-400/60 font-mono text-sm shrink-0 select-none">@</span>
+              {subdomains && subdomains.length > 0 ? (
+                <select
+                  value={domainId ?? ""}
+                  onChange={(e) => setDomainId(Number(e.target.value))}
+                  className="bg-transparent font-mono text-sm text-indigo-300 focus:outline-none cursor-pointer shrink-0 max-w-[160px]"
+                >
+                  {subdomains.map((s) => (
+                    <option key={s.id} value={s.id} className="bg-[#080d1a] text-white">{s.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-mono text-sm text-muted-foreground/40 shrink-0">no domain</span>
+              )}
+              <button
+                onClick={() => setAlias(randomAlias())}
+                title="Generate random alias"
+                className="p-2 rounded-lg text-indigo-400/60 hover:text-indigo-300 hover:bg-indigo-500/15 transition-all shrink-0"
               >
-                {subdomains.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-[#0c1220] text-white">{s.name}</option>
-                ))}
-              </select>
-            ) : (
-              <span className="font-mono text-sm text-muted-foreground/50 shrink-0">no domain</span>
-            )}
+                <Shuffle className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-3 px-5 pb-4">
             <button
-              onClick={() => setAlias(randomAlias())}
-              title="Generate random alias"
-              className="p-2 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              onClick={copyAddress}
+              disabled={!fullAddress}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all border ${
+                copiedAddress
+                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                  : "bg-white/5 border-border hover:bg-white/8 hover:border-white/20 text-foreground disabled:opacity-40"
+              }`}
             >
-              <Shuffle className="h-4 w-4" />
+              {copiedAddress
+                ? <><Check className="h-4 w-4" /> Copied!</>
+                : <><Copy className="h-4 w-4" /> Copy Address</>
+              }
+            </button>
+            <button
+              onClick={() => openInbox(fullAddress)}
+              disabled={!fullAddress}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl btn-gradient disabled:opacity-40 text-white font-semibold text-sm transition-all active:scale-[0.98]"
+            >
+              <Inbox className="h-4 w-4" />
+              Open Inbox
             </button>
           </div>
-        </div>
 
-        {/* Copy + Open buttons */}
-        <div className="flex gap-3 px-5 pb-5">
-          <button
-            onClick={copyAddress}
-            disabled={!fullAddress}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all ${
-              copiedAddress
-                ? "bg-green-500/15 border border-green-500/30 text-green-400"
-                : "bg-white/6 border border-border hover:bg-white/10 text-foreground disabled:opacity-40"
-            }`}
-          >
-            {copiedAddress ? (
-              <><Check className="h-4 w-4" /> Copied!</>
-            ) : (
-              <><Copy className="h-4 w-4" /> Copy Address</>
-            )}
-          </button>
-          <button
-            onClick={() => openInbox(fullAddress)}
-            disabled={!fullAddress}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 text-white font-semibold text-sm transition-all shadow-md shadow-primary/25 active:scale-[0.98]"
-          >
-            <Inbox className="h-4 w-4" />
-            Open Inbox
-          </button>
-        </div>
-
-        {/* Divider + any address row */}
-        <div className="border-t border-border px-5 py-3 flex items-center gap-2 bg-white/1">
-          <input
-            type="text"
-            value={anyAddress}
-            onChange={(e) => setAnyAddress(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && anyAddress.trim() && openInbox(anyAddress.trim())}
-            placeholder={selectedDomain ? `or check any address @${selectedDomain.name}` : "or enter any full email address"}
-            className="flex-1 min-w-0 bg-transparent text-xs font-mono text-white placeholder:text-muted-foreground/50 focus:outline-none"
-          />
-          <button
-            onClick={() => anyAddress.trim() && openInbox(anyAddress.trim())}
-            disabled={!anyAddress.trim()}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/8 hover:bg-white/15 disabled:opacity-30 text-muted-foreground hover:text-white text-xs font-medium transition-colors"
-          >
-            Check <ArrowRight className="h-3.5 w-3.5" />
-          </button>
+          {/* Check any address row */}
+          <div className="border-t border-border/60 px-5 py-3 flex items-center gap-2 bg-white/[0.02]">
+            <input
+              type="text"
+              value={anyAddress}
+              onChange={(e) => setAnyAddress(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && anyAddress.trim() && openInbox(anyAddress.trim())}
+              placeholder={selectedDomain ? `or check any address @${selectedDomain.name}` : "or enter any full email address"}
+              className="flex-1 min-w-0 bg-transparent text-xs font-mono text-white placeholder:text-muted-foreground/40 focus:outline-none"
+            />
+            <button
+              onClick={() => anyAddress.trim() && openInbox(anyAddress.trim())}
+              disabled={!anyAddress.trim()}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 disabled:opacity-30 text-indigo-400 hover:text-indigo-300 text-xs font-semibold transition-all border border-indigo-500/20"
+            >
+              Check <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── Inbox Panel ── */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xl shadow-black/20">
-
-          {/* Inbox header */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
-            <div className="flex-1 min-w-0">
-              {activeAddress ? (
-                <>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-mono text-sm text-white font-semibold truncate">{activeAddress}</span>
-                    <button
-                      onClick={copyAddress}
-                      className="p-1 rounded text-muted-foreground hover:text-primary transition-colors shrink-0"
-                    >
-                      {copiedAddress ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>{emails.length} messages</span>
-                    {unreadCount > 0 && (
-                      <span className="text-primary font-semibold">{unreadCount} unread</span>
-                    )}
-                    {lastRefreshed && (
-                      <span className="text-muted-foreground/40 text-[11px]">
-                        updated {formatDistanceToNow(lastRefreshed, { addSuffix: true })}
-                      </span>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground/50">No inbox open — enter an address above</p>
-              )}
-            </div>
-            <button
-              onClick={() => activeAddress && load(activeAddress, true)}
-              disabled={!activeAddress || refreshing}
-              className="p-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/8 transition-colors disabled:opacity-30"
-              title="Refresh inbox"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-
-          {/* Email list */}
-          {loading ? (
-            <div className="divide-y divide-border">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="flex items-center gap-4 px-5 py-4 animate-pulse">
-                  <div className="h-10 w-10 rounded-full bg-white/8 shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-3.5 w-36 bg-white/8 rounded-lg" />
-                    <div className="h-3 w-52 bg-white/5 rounded-lg" />
-                  </div>
+      {/* ── Live Inbox ── */}
+      <div className="relative rounded-2xl overflow-hidden border border-border bg-card">
+        {/* Inbox header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-gradient-to-r from-indigo-950/30 to-transparent">
+          <div className="flex-1 min-w-0">
+            {activeAddress ? (
+              <>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <span className="font-mono text-sm text-white font-semibold truncate">{activeAddress}</span>
+                  <button onClick={copyAddress} className="p-1 rounded-md text-muted-foreground hover:text-indigo-400 transition-colors shrink-0">
+                    {copiedAddress ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
-              ))}
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center py-14 text-center px-6">
-              <div className="h-12 w-12 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-center justify-center mb-4">
-                <Mail className="h-6 w-6 text-destructive/60" />
-              </div>
-              <p className="text-sm font-semibold text-white">{error}</p>
-              <p className="text-xs text-muted-foreground mt-1">Make sure this domain is registered under Domains</p>
-            </div>
-          ) : emails.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="h-14 w-14 rounded-2xl bg-primary/8 border border-primary/15 flex items-center justify-center mb-4">
-                <Inbox className="h-7 w-7 text-primary/40" />
-              </div>
-              <p className="text-sm font-semibold text-white">Waiting for emails</p>
-              <p className="text-xs text-muted-foreground mt-1.5">Share the address above and emails will appear here</p>
-              <div className="flex items-center gap-1.5 mt-4 text-[11px] text-muted-foreground/40 bg-white/3 border border-white/5 rounded-full px-3 py-1.5">
-                <RefreshCw className="h-3 w-3" />
-                Auto-refreshes every 5 seconds
-              </div>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {emails.map((email) => {
-                const isSelected = selectedId === email.id;
-                const color = avatarColor(email.fromAddress);
-                return (
-                  <div key={email.id}>
-                    <div
-                      className={`group flex items-center gap-4 px-5 py-4 cursor-pointer transition-all ${
-                        isSelected
-                          ? "bg-primary/8 border-l-[3px] border-primary"
-                          : "hover:bg-white/3 border-l-[3px] border-transparent"
-                      }`}
-                      onClick={() => handleSelect(email)}
-                    >
-                      {/* Avatar */}
-                      <div className={`h-10 w-10 rounded-full ${color} flex items-center justify-center shrink-0 text-white text-xs font-bold`}>
-                        {senderInitials(email.fromAddress)}
-                      </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-muted-foreground">{emails.length} messages</span>
+                  {unreadCount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-bold text-[11px]">
+                      {unreadCount} unread
+                    </span>
+                  )}
+                  {lastRefreshed && (
+                    <span className="text-muted-foreground/40 text-[11px]">
+                      · updated {formatDistanceToNow(lastRefreshed, { addSuffix: true })}
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground/40 italic">No inbox open — enter an address above</p>
+            )}
+          </div>
+          <button
+            onClick={() => activeAddress && load(activeAddress, true)}
+            disabled={!activeAddress || refreshing}
+            className="p-2.5 rounded-xl text-muted-foreground hover:text-indigo-400 hover:bg-indigo-500/10 transition-all disabled:opacity-30"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
+          </button>
+        </div>
 
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          {!email.isRead && (
-                            <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
-                          )}
-                          <span className={`text-sm truncate ${email.isRead ? "text-muted-foreground" : "text-white font-semibold"}`}>
-                            {senderName(email.fromAddress)}
-                          </span>
-                        </div>
-                        <p className={`text-xs truncate ${email.isRead ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
-                          {email.subject}
-                        </p>
-                      </div>
-
-                      {/* Time + actions */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[11px] text-muted-foreground/40 hidden sm:block">
-                          {formatDistanceToNow(new Date(email.receivedAt), { addSuffix: false })}
-                        </span>
-                        <button
-                          onClick={(e) => handleDelete(email.id, e)}
-                          className="p-1.5 rounded-lg hover:bg-destructive/15 text-muted-foreground/20 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                        {isSelected
-                          ? <ChevronDown className="h-4 w-4 text-primary" />
-                          : <ChevronRight className="h-4 w-4 text-muted-foreground/30" />}
-                      </div>
+        {/* Email list */}
+        {loading ? (
+          <div className="divide-y divide-border">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-5 py-4 animate-pulse">
+                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-white/8 to-white/4 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 w-36 bg-white/8 rounded-lg" />
+                  <div className="h-3 w-52 bg-white/5 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-14 text-center px-6">
+            <div className="h-14 w-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mb-4">
+              <Mail className="h-7 w-7 text-rose-400/60" />
+            </div>
+            <p className="text-sm font-semibold text-white">{error}</p>
+            <p className="text-xs text-muted-foreground mt-1.5">Make sure this domain is registered in Settings</p>
+          </div>
+        ) : emails.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="relative mb-5">
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 blur-xl" />
+              <div className="relative h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-500/15 to-violet-500/15 border border-indigo-500/25 flex items-center justify-center">
+                <Inbox className="h-8 w-8 text-indigo-400/60" />
+              </div>
+            </div>
+            <p className="text-sm font-bold text-white">Inbox is empty</p>
+            <p className="text-xs text-muted-foreground mt-1.5">Share your address and emails will appear here instantly</p>
+            <div className="flex items-center gap-2 mt-5 text-[11px] text-emerald-400/70 bg-emerald-500/8 border border-emerald-500/15 rounded-full px-4 py-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live · checking every 5 seconds
+            </div>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {emails.map((email) => {
+              const isSelected = selectedId === email.id;
+              const grad = avatarGradient(email.fromAddress);
+              return (
+                <div key={email.id}>
+                  <div
+                    className={`group flex items-center gap-4 px-5 py-4 cursor-pointer transition-all ${
+                      isSelected
+                        ? "bg-gradient-to-r from-indigo-950/40 to-transparent border-l-2 border-indigo-500"
+                        : "hover:bg-white/[0.025] border-l-2 border-transparent"
+                    }`}
+                    onClick={() => handleSelect(email)}
+                  >
+                    {/* Avatar */}
+                    <div className={`h-10 w-10 rounded-full bg-gradient-to-br ${grad} flex items-center justify-center shrink-0 text-white text-xs font-bold shadow-md`}>
+                      {senderInitials(email.fromAddress)}
                     </div>
 
-                    {/* Expanded email */}
-                    {isSelected && selectedEmail && (
-                      <div className="border-t border-border bg-background/50">
-                        <div className="px-5 py-4 border-b border-border space-y-1.5">
-                          <p className="text-sm font-bold text-white">{selectedEmail.subject}</p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-muted-foreground">
-                            <span><span className="text-muted-foreground/40">From </span>{selectedEmail.fromAddress}</span>
-                            <span><span className="text-muted-foreground/40">To </span><span className="text-primary">{selectedEmail.toAddress}</span></span>
-                            <span className="text-muted-foreground/40">{format(new Date(selectedEmail.receivedAt), "MMM d, yyyy · HH:mm")}</span>
-                          </div>
-                        </div>
-                        <div className="px-5 py-5">
-                          {selectedEmail.bodyHtml ? (
-                            <div
-                              className="prose prose-sm max-w-none text-foreground/85 leading-relaxed
-                                [&_a]:text-primary [&_a]:no-underline hover:[&_a]:underline
-                                [&_img]:max-w-full [&_img]:rounded-xl
-                                [&_p]:text-foreground/75 [&_p]:mb-3 [&_p]:text-sm
-                                [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white
-                                [&_blockquote]:border-l-2 [&_blockquote]:border-white/10 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground"
-                              dangerouslySetInnerHTML={{ __html: selectedEmail.bodyHtml }}
-                            />
-                          ) : (
-                            <pre className="font-mono text-xs text-foreground/75 whitespace-pre-wrap break-words leading-relaxed">
-                              {selectedEmail.bodyText || "(no content)"}
-                            </pre>
-                          )}
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        {!email.isRead && (
+                          <div className="h-2 w-2 rounded-full bg-indigo-400 shrink-0 shadow-sm shadow-indigo-400/50" />
+                        )}
+                        <span className={`text-sm truncate ${email.isRead ? "text-muted-foreground" : "text-white font-semibold"}`}>
+                          {senderName(email.fromAddress)}
+                        </span>
+                      </div>
+                      <p className={`text-xs truncate ${email.isRead ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
+                        {email.subject}
+                      </p>
+                    </div>
+
+                    {/* Time + delete */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[11px] text-muted-foreground/30 hidden sm:block font-mono">
+                        {formatDistanceToNow(new Date(email.receivedAt), { addSuffix: false })}
+                      </span>
+                      <button
+                        onClick={(e) => handleDelete(email.id, e)}
+                        className="p-1.5 rounded-lg hover:bg-rose-500/15 text-muted-foreground/20 hover:text-rose-400 transition-all opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                      {isSelected
+                        ? <ChevronDown className="h-4 w-4 text-indigo-400" />
+                        : <ChevronRight className="h-4 w-4 text-muted-foreground/20" />}
+                    </div>
+                  </div>
+
+                  {/* Email reader */}
+                  {isSelected && selectedEmail && (
+                    <div className="border-t border-border bg-gradient-to-b from-indigo-950/20 to-transparent">
+                      <div className="px-5 py-4 border-b border-border/60 space-y-2">
+                        <p className="text-base font-bold text-white">{selectedEmail.subject}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono">
+                          <span><span className="text-muted-foreground/40">From </span><span className="text-slate-300">{selectedEmail.fromAddress}</span></span>
+                          <span><span className="text-muted-foreground/40">To </span><span className="text-indigo-400">{selectedEmail.toAddress}</span></span>
+                          <span className="text-muted-foreground/30">{format(new Date(selectedEmail.receivedAt), "MMM d, yyyy · HH:mm")}</span>
                         </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                      <div className="px-5 py-5">
+                        {selectedEmail.bodyHtml ? (
+                          <div
+                            className="prose prose-sm max-w-none text-foreground/85 leading-relaxed
+                              [&_a]:text-indigo-400 [&_a]:no-underline hover:[&_a]:underline
+                              [&_img]:max-w-full [&_img]:rounded-xl
+                              [&_p]:text-foreground/75 [&_p]:mb-3 [&_p]:text-sm
+                              [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white
+                              [&_blockquote]:border-l-2 [&_blockquote]:border-indigo-500/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground"
+                            dangerouslySetInnerHTML={{ __html: selectedEmail.bodyHtml }}
+                          />
+                        ) : (
+                          <pre className="font-mono text-xs text-foreground/70 whitespace-pre-wrap break-words leading-relaxed">
+                            {selectedEmail.bodyText || "(no content)"}
+                          </pre>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-          {/* Auto-refresh footer */}
-          {emails.length > 0 && (
-            <div className="flex items-center justify-center gap-2 px-5 py-3 border-t border-border bg-white/1">
-              <div className="h-1.5 w-1.5 rounded-full bg-green-400/70 animate-pulse" />
-              <span className="text-[11px] text-muted-foreground/40">Auto-refreshing every 5 seconds</span>
-            </div>
-          )}
-        </div>
+        {/* Footer */}
+        {emails.length > 0 && (
+          <div className="flex items-center justify-center gap-2 px-5 py-3 border-t border-border bg-white/[0.015]">
+            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] text-muted-foreground/30">Live inbox · updates every 5 seconds</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
