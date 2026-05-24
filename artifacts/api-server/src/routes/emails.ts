@@ -289,17 +289,38 @@ router.post("/webhook/email", async (req, res) => {
   }
 
   if (!matchedSub) {
-    const msg = `No subdomain registered for: ${to}`;
-    addWebhookLog({ status: "no_domain", from, to, subject, statusCode: 404, message: msg, receivedKeys });
-    res.status(404).json({ error: msg });
+    // Auto-register the domain so emails always get accepted
+    const [created] = await db
+      .insert(subdomainsTable)
+      .values({ name: toDomain })
+      .onConflictDoNothing()
+      .returning();
+    // If onConflictDoNothing returned nothing, fetch the existing row
+    matchedSub = created ?? (await db.select().from(subdomainsTable).where(eq(subdomainsTable.name, toDomain)).limit(1))[0];
+    req.log.info({ domain: toDomain }, "Auto-registered domain from webhook");
+  }
+
+  if (!matchedSub) {
+    // Should never happen, but guard anyway
+    res.status(500).json({ error: "Failed to register domain" });
     return;
+  }
+
+  let resolvedAddressId = matchedAddress?.id ?? null;
+  if (!resolvedAddressId && toLocal) {
+    const [createdAddr] = await db
+      .insert(addressesTable)
+      .values({ localPart: toLocal, domain: toDomain, subdomainId: matchedSub.id })
+      .onConflictDoNothing()
+      .returning();
+    resolvedAddressId = createdAddr?.id ?? null;
   }
 
   const [inserted] = await db
     .insert(emailsTable)
     .values({
       subdomainId: matchedSub.id,
-      addressId: matchedAddress?.id ?? null,
+      addressId: resolvedAddressId,
       fromAddress: from,
       toAddress: to,
       subject: subject ?? "(No Subject)",
