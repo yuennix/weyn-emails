@@ -28,8 +28,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// API routes
+// API routes — accessible at /api/* (canonical) and /* (fallback for misconfigured webhooks)
 app.use("/api", router);
+app.use("/", router);
 
 // Serve the built frontend in production (Railway / deployed)
 const publicDir = path.resolve(__dirname, "public");

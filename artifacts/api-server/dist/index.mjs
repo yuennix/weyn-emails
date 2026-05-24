@@ -51465,6 +51465,7 @@ app.use((0, import_cors.default)());
 app.use(import_express6.default.json());
 app.use(import_express6.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
+app.use("/", routes_default);
 var publicDir = path.resolve(__dirname2, "public");
 if (process.env.NODE_ENV === "production" && existsSync(publicDir)) {
   app.use(import_express6.default.static(publicDir));
