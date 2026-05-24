@@ -201,7 +201,7 @@ function WebhookPanel() {
   const webhookUrl = import.meta.env.VITE_PUBLIC_URL
     ? `${import.meta.env.VITE_PUBLIC_URL}/api/webhook/email`
     : __REPLIT_DEV_DOMAIN__
-      ? `https://${__REPLIT_DEV_DOMAIN__}/api/webhook/email`
+      ? `https://${__REPLIT_DEV_DOMAIN__}:8080/api/webhook/email`
       : `${window.location.origin}/api/webhook/email`;
 
   const fetchLogs = async () => {
