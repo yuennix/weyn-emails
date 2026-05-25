@@ -25,7 +25,8 @@ async function main() {
 
   if (process.env.DATABASE_URL) {
     try {
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const ssl = process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false;
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl });
       const migrationDb = drizzle(pool);
       const __dirname = path.dirname(fileURLToPath(import.meta.url));
       const migrationsFolder = path.resolve(__dirname, "../../../lib/db/drizzle");
