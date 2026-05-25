@@ -173,6 +173,24 @@ router.get("/webhook/logs", (_req, res) => {
   res.json(getWebhookLogs());
 });
 
+/** Decode Content-Transfer-Encoding for a MIME body part */
+function decodeMimePart(body: string, encoding: string): string {
+  const enc = encoding.toLowerCase().trim();
+  if (enc === "base64") {
+    try {
+      return Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf-8");
+    } catch {
+      return body;
+    }
+  }
+  if (enc === "quoted-printable") {
+    return body
+      .replace(/=\r?\n/g, "")
+      .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  }
+  return body;
+}
+
 /** Parse a raw MIME email string and extract from/to/subject/body fields */
 function parseMimeEmail(raw: string): Record<string, string> {
   // Normalize line endings (email RFCs use CRLF; normalize to LF)
@@ -191,28 +209,50 @@ function parseMimeEmail(raw: string): Record<string, string> {
   const to      = getHeader("To") || getHeader("Delivered-To") || getHeader("X-Original-To") || getHeader("X-Forwarded-To");
   const subject = getHeader("Subject");
 
-  // Handle multipart bodies — prefer text/html, fall back to text/plain
+  // Handle multipart bodies — collect both html and text parts
   const contentType = getHeader("Content-Type");
   const boundaryMatch = contentType.match(/boundary=["']?([^"';\s\r\n]+)/i);
-  let finalBody = bodyBlock;
+  let htmlPart = "";
+  let textPart = "";
+
   if (boundaryMatch) {
     const boundary = boundaryMatch[1];
     const escaped = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const parts = text.split(new RegExp(`--${escaped}(?:--)?\n?`));
-    let htmlPart = "", textPart = "";
     for (const part of parts) {
       const pb = part.indexOf("\n\n");
       if (pb < 0) continue;
       const ph = part.slice(0, pb);
-      const body = part.slice(pb + 2).trim();
+      const rawBody = part.slice(pb + 2).trim();
       const ct = (ph.match(/^Content-Type:\s*([^\s;]+)/im)?.[1] ?? "").toLowerCase();
-      if (ct === "text/html" && !htmlPart) htmlPart = body;
-      else if (ct === "text/plain" && !textPart) textPart = body;
+      const cte = (ph.match(/^Content-Transfer-Encoding:\s*(\S+)/im)?.[1] ?? "7bit");
+      const decoded = decodeMimePart(rawBody, cte);
+
+      // Handle nested multipart (e.g. multipart/alternative inside multipart/mixed)
+      const nestedBoundaryMatch = ph.match(/boundary=["']?([^"';\s\r\n]+)/i);
+      if (ct.startsWith("multipart/") && nestedBoundaryMatch) {
+        const nestedResult = parseMimeEmail(part);
+        if (nestedResult.html && !htmlPart) htmlPart = nestedResult.html;
+        if (nestedResult.text && !textPart) textPart = nestedResult.text;
+      } else if (ct === "text/html" && !htmlPart) {
+        htmlPart = decoded;
+      } else if (ct === "text/plain" && !textPart) {
+        textPart = decoded;
+      }
     }
-    finalBody = htmlPart || textPart || bodyBlock;
+  } else {
+    // Single-part email — decode the body
+    const topCte = getHeader("Content-Transfer-Encoding") || "7bit";
+    const topCt = contentType.toLowerCase().split(";")[0].trim();
+    const decoded = decodeMimePart(bodyBlock, topCte);
+    if (topCt === "text/html") {
+      htmlPart = decoded;
+    } else {
+      textPart = decoded;
+    }
   }
 
-  return { from, to, subject, body: finalBody };
+  return { from, to, subject, html: htmlPart, text: textPart || bodyBlock };
 }
 
 // POST /webhook/email

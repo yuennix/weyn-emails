@@ -1,3 +1,4 @@
+import { EmailBody } from "@/components/email-body";
 import {
   useListRecentEmails,
   useMarkEmailRead,
@@ -164,19 +165,7 @@ export default function Inbox() {
                       </div>
                     </div>
                     <div className="px-5 py-5">
-                      {email.bodyHtml ? (
-                        <div
-                          className="prose prose-sm max-w-none text-foreground/85 leading-relaxed
-                            [&_a]:text-primary [&_a]:no-underline hover:[&_a]:underline
-                            [&_img]:max-w-full [&_img]:rounded-xl
-                            [&_p]:text-foreground/75 [&_p]:mb-3 [&_p]:text-sm"
-                          dangerouslySetInnerHTML={{ __html: email.bodyHtml }}
-                        />
-                      ) : (
-                        <pre className="font-mono text-xs text-foreground/80 whitespace-pre-wrap break-words leading-relaxed">
-                          {email.bodyText || "(no content)"}
-                        </pre>
-                      )}
+                      <EmailBody bodyHtml={email.bodyHtml} bodyText={email.bodyText} />
                     </div>
                   </div>
                 )}

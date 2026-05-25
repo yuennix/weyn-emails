@@ -1,3 +1,4 @@
+import { EmailBody } from "@/components/email-body";
 import {
   useGetAddress,
   useListEmailsByAddress,
@@ -174,11 +175,7 @@ export default function AddressInbox() {
                       <div><span className="text-muted-foreground">Received:</span> <span className="text-foreground">{format(new Date(email.receivedAt), "MMM d, yyyy HH:mm")}</span></div>
                     </div>
                     <div className="border-t border-border pt-3">
-                      {email.bodyHtml ? (
-                        <div className="prose prose-sm prose-invert max-w-none text-xs" dangerouslySetInnerHTML={{ __html: email.bodyHtml }} />
-                      ) : (
-                        <pre className="font-mono text-xs text-foreground/80 whitespace-pre-wrap break-words leading-relaxed">{email.bodyText}</pre>
-                      )}
+                      <EmailBody bodyHtml={email.bodyHtml} bodyText={email.bodyText} />
                     </div>
                   </div>
                 )}

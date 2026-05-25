@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { fetchInbox, markEmailRead, deleteEmail, InboxEmail } from "@/lib/api";
 import { formatDistanceToNow, format } from "date-fns";
+import { EmailBody } from "@/components/email-body";
 
 function senderInitials(from: string) {
   const name = from.split("<")[0].trim() || from;
@@ -244,21 +245,7 @@ export default function InboxView() {
 
                         {/* Body */}
                         <div className="px-5 py-5">
-                          {selectedEmail.bodyHtml ? (
-                            <div
-                              className="prose prose-sm max-w-none text-foreground/90 leading-relaxed
-                                [&_a]:text-primary [&_a]:no-underline hover:[&_a]:underline
-                                [&_img]:max-w-full [&_img]:rounded-lg
-                                [&_p]:text-foreground/80 [&_p]:mb-3
-                                [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white
-                                [&_blockquote]:border-l-2 [&_blockquote]:border-white/10 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground"
-                              dangerouslySetInnerHTML={{ __html: selectedEmail.bodyHtml }}
-                            />
-                          ) : (
-                            <pre className="font-mono text-sm text-foreground/75 whitespace-pre-wrap break-words leading-relaxed">
-                              {selectedEmail.bodyText || "(no content)"}
-                            </pre>
-                          )}
+                          <EmailBody bodyHtml={selectedEmail.bodyHtml} bodyText={selectedEmail.bodyText} />
                         </div>
                       </div>
                     )}

@@ -51165,6 +51165,20 @@ router3.patch("/emails/:id/read", async (req, res) => {
 router3.get("/webhook/logs", (_req, res) => {
   res.json(getWebhookLogs());
 });
+function decodeMimePart(body, encoding) {
+  const enc = encoding.toLowerCase().trim();
+  if (enc === "base64") {
+    try {
+      return Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf-8");
+    } catch {
+      return body;
+    }
+  }
+  if (enc === "quoted-printable") {
+    return body.replace(/=\r?\n/g, "").replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  }
+  return body;
+}
 function parseMimeEmail(raw) {
   const text2 = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const blankLine = text2.indexOf("\n\n");
@@ -51180,25 +51194,43 @@ function parseMimeEmail(raw) {
   const subject = getHeader("Subject");
   const contentType = getHeader("Content-Type");
   const boundaryMatch = contentType.match(/boundary=["']?([^"';\s\r\n]+)/i);
-  let finalBody = bodyBlock;
+  let htmlPart = "";
+  let textPart = "";
   if (boundaryMatch) {
     const boundary = boundaryMatch[1];
     const escaped = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const parts = text2.split(new RegExp(`--${escaped}(?:--)?
 ?`));
-    let htmlPart = "", textPart = "";
     for (const part of parts) {
       const pb = part.indexOf("\n\n");
       if (pb < 0) continue;
       const ph = part.slice(0, pb);
-      const body = part.slice(pb + 2).trim();
+      const rawBody = part.slice(pb + 2).trim();
       const ct = (ph.match(/^Content-Type:\s*([^\s;]+)/im)?.[1] ?? "").toLowerCase();
-      if (ct === "text/html" && !htmlPart) htmlPart = body;
-      else if (ct === "text/plain" && !textPart) textPart = body;
+      const cte = ph.match(/^Content-Transfer-Encoding:\s*(\S+)/im)?.[1] ?? "7bit";
+      const decoded = decodeMimePart(rawBody, cte);
+      const nestedBoundaryMatch = ph.match(/boundary=["']?([^"';\s\r\n]+)/i);
+      if (ct.startsWith("multipart/") && nestedBoundaryMatch) {
+        const nestedResult = parseMimeEmail(part);
+        if (nestedResult.html && !htmlPart) htmlPart = nestedResult.html;
+        if (nestedResult.text && !textPart) textPart = nestedResult.text;
+      } else if (ct === "text/html" && !htmlPart) {
+        htmlPart = decoded;
+      } else if (ct === "text/plain" && !textPart) {
+        textPart = decoded;
+      }
     }
-    finalBody = htmlPart || textPart || bodyBlock;
+  } else {
+    const topCte = getHeader("Content-Transfer-Encoding") || "7bit";
+    const topCt = contentType.toLowerCase().split(";")[0].trim();
+    const decoded = decodeMimePart(bodyBlock, topCte);
+    if (topCt === "text/html") {
+      htmlPart = decoded;
+    } else {
+      textPart = decoded;
+    }
   }
-  return { from, to, subject, body: finalBody };
+  return { from, to, subject, html: htmlPart, text: textPart || bodyBlock };
 }
 router3.post("/webhook/email", async (req, res) => {
   const b = req.body;

@@ -7,6 +7,7 @@ import {
 import { useListSubdomains, getListSubdomainsQueryKey } from "@workspace/api-client-react";
 import { fetchInbox, markEmailRead, deleteEmail, InboxEmail } from "@/lib/api";
 import { formatDistanceToNow, format } from "date-fns";
+import { EmailBody } from "@/components/email-body";
 
 const ADJECTIVES = ["swift", "dark", "cool", "bold", "quick", "lazy", "bright", "wild", "silent", "sharp"];
 const NOUNS = ["fox", "bear", "hawk", "wolf", "lynx", "raven", "pike", "crane", "viper", "jade"];
@@ -378,21 +379,7 @@ export default function Home() {
                         </div>
                       </div>
                       <div className="px-5 py-5">
-                        {selectedEmail.bodyHtml ? (
-                          <div
-                            className="prose prose-sm max-w-none text-foreground/85 leading-relaxed
-                              [&_a]:text-indigo-400 [&_a]:no-underline hover:[&_a]:underline
-                              [&_img]:max-w-full [&_img]:rounded-xl
-                              [&_p]:text-foreground/75 [&_p]:mb-3 [&_p]:text-sm
-                              [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white
-                              [&_blockquote]:border-l-2 [&_blockquote]:border-indigo-500/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground"
-                            dangerouslySetInnerHTML={{ __html: selectedEmail.bodyHtml }}
-                          />
-                        ) : (
-                          <pre className="font-mono text-xs text-foreground/70 whitespace-pre-wrap break-words leading-relaxed">
-                            {selectedEmail.bodyText || "(no content)"}
-                          </pre>
-                        )}
+                        <EmailBody bodyHtml={selectedEmail.bodyHtml} bodyText={selectedEmail.bodyText} />
                       </div>
                     </div>
                   )}
