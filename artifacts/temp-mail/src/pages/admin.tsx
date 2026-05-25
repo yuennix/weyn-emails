@@ -33,6 +33,10 @@ function DomainsPanel() {
     },
   });
 
+  const createError = create.error
+    ? ((create.error as { data?: { error?: string } })?.data?.error ?? (create.error as Error)?.message ?? "Failed to add domain")
+    : null;
+
   const remove = useDeleteSubdomain({
     mutation: {
       onSuccess: () => {
@@ -66,6 +70,12 @@ function DomainsPanel() {
           {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" /> Add</>}
         </button>
       </form>
+      {createError && (
+        <p className="flex items-center gap-2 text-xs text-red-400 px-1">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          {createError}
+        </p>
+      )}
 
       {/* Domain list */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
