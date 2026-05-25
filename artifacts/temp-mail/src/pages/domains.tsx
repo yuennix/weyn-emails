@@ -6,7 +6,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Trash2, Globe, Loader2, Mail, X } from "lucide-react";
+import { Plus, Trash2, Globe, Loader2, Mail, X, AlertCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export default function DomainsPage() {
@@ -28,6 +28,10 @@ export default function DomainsPage() {
       },
     },
   });
+
+  const createError = create.error
+    ? ((create.error as { data?: { error?: string } })?.data?.error ?? (create.error as Error)?.message ?? "Failed to add domain")
+    : null;
 
   const remove = useDeleteSubdomain({
     mutation: {
@@ -83,6 +87,12 @@ export default function DomainsPage() {
             <p className="text-xs text-muted-foreground">
               All emails sent to any address @this-domain will be captured and available in the inbox.
             </p>
+            {createError && (
+              <p className="flex items-center gap-2 text-xs text-red-400">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                {createError}
+              </p>
+            )}
             <div className="flex gap-2">
               <button
                 type="submit"
