@@ -35,9 +35,9 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname),
   build: {
-    // On Railway, output next to the API server so Express can serve it.
-    // On Replit, keep the default local dist.
-    outDir: process.env.RAILWAY_ENVIRONMENT
+    // In production (Railway / any deployment), output next to the API server so Express can serve it.
+    // In dev (Replit), keep the default local dist.
+    outDir: process.env.NODE_ENV === "production"
       ? path.resolve(import.meta.dirname, "../api-server/dist/public")
       : path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
