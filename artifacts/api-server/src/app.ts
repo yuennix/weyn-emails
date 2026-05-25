@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "node:path";
@@ -41,5 +41,12 @@ if (process.env.NODE_ENV === "production" && existsSync(publicDir)) {
     res.sendFile(path.join(publicDir, "index.html"));
   });
 }
+
+// JSON error handler — must be after all routes
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  logger.error({ err }, "Unhandled route error");
+  res.status(500).json({ error: err.message || "Internal server error" });
+});
 
 export default app;
