@@ -50895,7 +50895,8 @@ function getPool() {
         "DATABASE_URL must be set. Did you forget to provision a database?"
       );
     }
-    _pool = new Pool2({ connectionString: process.env.DATABASE_URL });
+    const ssl = process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false;
+    _pool = new Pool2({ connectionString: process.env.DATABASE_URL, ssl });
   }
   return _pool;
 }
@@ -51473,6 +51474,10 @@ if (process.env.NODE_ENV === "production" && existsSync(publicDir)) {
     res.sendFile(path.join(publicDir, "index.html"));
   });
 }
+app.use((err, _req, res, _next) => {
+  logger.error({ err }, "Unhandled route error");
+  res.status(500).json({ error: err.message || "Internal server error" });
+});
 var app_default = app;
 
 // src/index.ts
@@ -51533,7 +51538,8 @@ async function main() {
   }
   if (process.env.DATABASE_URL) {
     try {
-      const pool2 = new Pool3({ connectionString: process.env.DATABASE_URL });
+      const ssl = process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false;
+      const pool2 = new Pool3({ connectionString: process.env.DATABASE_URL, ssl });
       const migrationDb = drizzle(pool2);
       const __dirname3 = path2.dirname(fileURLToPath2(import.meta.url));
       const migrationsFolder = path2.resolve(__dirname3, "../../../lib/db/drizzle");
