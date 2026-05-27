@@ -9,6 +9,7 @@ import {
   ListRecentEmailsQueryParams,
 } from "@workspace/api-zod";
 import { addWebhookLog, getWebhookLogs } from "../lib/webhookLog";
+import { addSSEClient, broadcastNewEmail } from "../lib/sse";
 
 const router = Router();
 
@@ -31,6 +32,22 @@ function formatEmail(e: {
     isRead: e.isRead,
   };
 }
+
+// GET /sse?address=foo@domain.com — SSE stream for real-time inbox updates
+router.get("/sse", (req, res) => {
+  const address = String(req.query.address ?? "").toLowerCase().trim();
+  if (!address) {
+    res.status(400).json({ error: "address query param required" });
+    return;
+  }
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  res.write(": connected\n\n");
+  addSSEClient(address, res);
+});
 
 // GET /inbox?address=foo@domain.com — look up inbox by email address string
 router.get("/inbox", async (req, res) => {
@@ -370,6 +387,7 @@ router.post("/webhook/email", async (req, res) => {
     })
     .returning();
 
+  broadcastNewEmail(to, inserted.id);
   addWebhookLog({ status: "success", from, to, subject, statusCode: 200, message: "Email saved", receivedKeys });
   res.json(formatEmail(inserted, matchedSub.name));
 });

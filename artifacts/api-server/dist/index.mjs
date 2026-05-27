@@ -51039,6 +51039,26 @@ function getWebhookLogs() {
   return log;
 }
 
+// src/lib/sse.ts
+var clients = [];
+function addSSEClient(address, res) {
+  clients.push({ address, res });
+  res.on("close", () => {
+    const idx = clients.findIndex((c) => c.res === res);
+    if (idx !== -1) clients.splice(idx, 1);
+  });
+}
+function broadcastNewEmail(toAddress, emailId) {
+  const payload = JSON.stringify({ emailId, toAddress });
+  for (const client of clients) {
+    if (client.address.toLowerCase() === toAddress.toLowerCase()) {
+      client.res.write(`data: ${payload}
+
+`);
+    }
+  }
+}
+
 // src/routes/emails.ts
 var router3 = (0, import_express3.Router)();
 function formatEmail(e, subdomainName) {
@@ -51056,6 +51076,20 @@ function formatEmail(e, subdomainName) {
     isRead: e.isRead
   };
 }
+router3.get("/sse", (req, res) => {
+  const address = String(req.query.address ?? "").toLowerCase().trim();
+  if (!address) {
+    res.status(400).json({ error: "address query param required" });
+    return;
+  }
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  res.write(": connected\n\n");
+  addSSEClient(address, res);
+});
 router3.get("/inbox", async (req, res) => {
   const address = String(req.query.address ?? "").toLowerCase().trim();
   if (!address) {
@@ -51303,6 +51337,7 @@ router3.post("/webhook/email", async (req, res) => {
     bodyHtml: bodyHtml ?? null,
     isRead: false
   }).returning();
+  broadcastNewEmail(to, inserted.id);
   addWebhookLog({ status: "success", from, to, subject, statusCode: 200, message: "Email saved", receivedKeys });
   res.json(formatEmail(inserted, matchedSub.name));
 });
