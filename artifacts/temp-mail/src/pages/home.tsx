@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Shuffle, Copy, Check, Trash2,
   RefreshCw, Inbox, ChevronDown, ChevronRight, ArrowRight,
-  Mail, Sparkles,
+  Mail, Sparkles, Crown, Lock,
 } from "lucide-react";
+import { Link } from "wouter";
 import { useListSubdomains, getListSubdomainsQueryKey } from "@workspace/api-client-react";
 import { fetchInbox, markEmailRead, deleteEmail, InboxEmail } from "@/lib/api";
 import { formatDistanceToNow, format } from "date-fns";
 import { EmailBody } from "@/components/email-body";
+import { useUserTier } from "@/hooks/use-user-tier";
 
 const ADJECTIVES = ["swift", "dark", "cool", "bold", "quick", "lazy", "bright", "wild", "silent", "sharp"];
 const NOUNS = ["fox", "bear", "hawk", "wolf", "lynx", "raven", "pike", "crane", "viper", "jade"];
@@ -47,6 +49,22 @@ function avatarGradient(from: string) {
   return AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length];
 }
 
+function isFacebookCode(email: InboxEmail): boolean {
+  const subject = (email.subject ?? "").toLowerCase();
+  const from = (email.fromAddress ?? "").toLowerCase();
+  const body = ((email.bodyText ?? "") + (email.bodyHtml ?? "")).toLowerCase();
+
+  const isFacebook =
+    from.includes("facebook") ||
+    subject.includes("facebook") ||
+    subject.includes("fb") ||
+    body.includes("facebook");
+
+  const hasEightDigitCode = /\b\d{8}\b/.test(email.bodyText ?? "") || /\b\d{8}\b/.test(email.subject ?? "");
+
+  return isFacebook && hasEightDigitCode;
+}
+
 export default function Home() {
   const [alias, setAlias] = useState(randomAlias);
   const [domainId, setDomainId] = useState<number | null>(null);
@@ -60,6 +78,10 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const { tier, isSignedIn } = useUserTier();
+  const isFree = tier === "free";
+  const isPremium = tier === "premium";
 
   const { data: subdomains } = useListSubdomains({ query: { queryKey: getListSubdomainsQueryKey() } });
 
@@ -133,11 +155,50 @@ export default function Home() {
     setTimeout(() => setCopiedAddress(false), 2500);
   };
 
-  const unreadCount = emails.filter((e) => !e.isRead).length;
-  const selectedEmail = emails.find((e) => e.id === selectedId);
+  // Apply free tier filter: only show Facebook 8-digit security code emails
+  const visibleEmails = isFree ? emails.filter(isFacebookCode) : emails;
+  const hiddenCount = emails.length - visibleEmails.length;
+
+  const unreadCount = visibleEmails.filter((e) => !e.isRead).length;
+  const selectedEmail = visibleEmails.find((e) => e.id === selectedId);
 
   return (
     <div className="space-y-4">
+
+      {/* ── Free Tier Banner ── */}
+      {isFree && (
+        <div className="relative rounded-2xl overflow-hidden border border-yellow-500/20 bg-gradient-to-r from-yellow-500/8 to-amber-500/5 px-5 py-4">
+          <div className="flex items-start gap-3">
+            <div className="h-8 w-8 rounded-xl bg-yellow-500/15 border border-yellow-500/25 flex items-center justify-center shrink-0 mt-0.5">
+              <Lock className="h-4 w-4 text-yellow-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-yellow-300 mb-0.5">Free Plan — Limited Access</p>
+              <p className="text-xs text-yellow-200/50 leading-relaxed">
+                You can only receive <span className="text-yellow-300 font-semibold">Facebook 8-digit security codes</span>.
+                {!isSignedIn
+                  ? " Sign up for a free account to get started, or upgrade to Premium for all platforms."
+                  : " Upgrade to Premium to receive emails from all platforms with no limitations."}
+              </p>
+            </div>
+            {isSignedIn ? (
+              <div className="shrink-0">
+                <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-yellow-500/15 border border-yellow-500/25 text-yellow-300 text-xs font-bold">
+                  <Crown className="h-3 w-3" />
+                  Upgrade
+                </span>
+              </div>
+            ) : (
+              <Link
+                href="/sign-up"
+                className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold hover:bg-indigo-500/30 transition-all"
+              >
+                Sign Up
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Address Generator Card ── */}
       <div className="relative rounded-2xl overflow-hidden">
@@ -253,7 +314,7 @@ export default function Home() {
                   </button>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
-                  <span className="text-muted-foreground">{emails.length} messages</span>
+                  <span className="text-muted-foreground">{visibleEmails.length} messages</span>
                   {unreadCount > 0 && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-bold text-[11px]">
                       {unreadCount} unread
@@ -300,7 +361,7 @@ export default function Home() {
             <p className="text-sm font-semibold text-white">{error}</p>
             <p className="text-xs text-muted-foreground mt-1.5">Make sure this domain is registered in Settings</p>
           </div>
-        ) : emails.length === 0 ? (
+        ) : visibleEmails.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="relative mb-5">
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 blur-xl" />
@@ -309,7 +370,14 @@ export default function Home() {
               </div>
             </div>
             <p className="text-sm font-bold text-white">Inbox is empty</p>
-            <p className="text-xs text-muted-foreground mt-1.5">Share your address and emails will appear here instantly</p>
+            {isFree && hiddenCount > 0 ? (
+              <p className="text-xs text-muted-foreground mt-1.5 max-w-xs">
+                {hiddenCount} email{hiddenCount > 1 ? "s" : ""} received but hidden on Free plan.{" "}
+                <span className="text-yellow-400 font-semibold">Upgrade to Premium</span> to see all emails.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1.5">Share your address and emails will appear here instantly</p>
+            )}
             <div className="flex items-center gap-2 mt-5 text-[11px] text-emerald-400/70 bg-emerald-500/8 border border-emerald-500/15 rounded-full px-4 py-2">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Live · checking every 5 seconds
@@ -317,7 +385,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {emails.map((email) => {
+            {visibleEmails.map((email) => {
               const isSelected = selectedId === email.id;
               const grad = avatarGradient(email.fromAddress);
               return (
@@ -386,11 +454,27 @@ export default function Home() {
                 </div>
               );
             })}
+
+            {/* Premium upsell when emails are hidden */}
+            {isFree && hiddenCount > 0 && (
+              <div className="flex items-center gap-3 px-5 py-4 bg-gradient-to-r from-yellow-500/5 to-transparent border-l-2 border-yellow-500/30">
+                <div className="h-10 w-10 rounded-full bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
+                  <Lock className="h-4 w-4 text-yellow-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-yellow-300">
+                    {hiddenCount} email{hiddenCount > 1 ? "s" : ""} hidden
+                  </p>
+                  <p className="text-xs text-yellow-200/40">Upgrade to Premium to unlock all emails</p>
+                </div>
+                <Crown className="h-4 w-4 text-yellow-400 shrink-0" />
+              </div>
+            )}
           </div>
         )}
 
         {/* Footer */}
-        {emails.length > 0 && (
+        {visibleEmails.length > 0 && (
           <div className="flex items-center justify-center gap-2 px-5 py-3 border-t border-border bg-white/[0.015]">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-[11px] text-muted-foreground/30">Live inbox · updates every 5 seconds</span>
