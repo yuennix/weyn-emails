@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Shuffle, Copy, Check, Trash2,
-  RefreshCw, Inbox, ChevronDown, ChevronRight, ArrowRight,
-  Mail, Sparkles, Crown, Lock,
+  Shuffle, Copy, Check, Trash2, Trash,
+  RefreshCw, Inbox, ChevronDown, ArrowRight,
+  Zap, ZapOff, Search, X, Crown, Radio,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useListSubdomains, getListSubdomainsQueryKey } from "@workspace/api-client-react";
@@ -11,90 +11,77 @@ import { formatDistanceToNow, format } from "date-fns";
 import { EmailBody } from "@/components/email-body";
 import { useUserTier } from "@/hooks/use-user-tier";
 
-const ADJECTIVES = ["swift", "dark", "cool", "bold", "quick", "lazy", "bright", "wild", "silent", "sharp"];
-const NOUNS = ["fox", "bear", "hawk", "wolf", "lynx", "raven", "pike", "crane", "viper", "jade"];
+const AUTO_REFRESH_INTERVAL = 15000;
 
-function randomAlias() {
-  const a = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
-  const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-  const num = Math.floor(Math.random() * 900) + 100;
-  return `${a}${n}${num}`;
+function generatePrefix(): string {
+  const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+  const adjectives = ["Angry","Blazing","Bright","Calm","Clever","Cosmic","Cozy","Dark","Dreamy","Electric","Epic","Frozen","Funky","Golden","Happy","Icy","Jolly","Lazy","Lucky","Mad","Misty","Moody","Mystic","Quiet","Rapid","Rusty","Salty","Shiny","Sleepy","Slick","Sneaky","Spooky","Sunny","Sweet","Tiny","Vivid","Wild","Zippy"];
+  const nouns = ["Anchor","Arrow","Bear","Bird","Blade","Blaze","Cloud","Comet","Diamond","Eagle","Ember","Falcon","Flame","Flash","Fox","Frost","Ghost","Gold","Hammer","Hawk","Hill","Honey","Island","Jet","Knight","Lantern","Light","Lion","Moon","Nova","Oak","Ocean","Petal","Rain","Raven","Rock","Rose","Shadow","Sky","Snow","Spark","Star","Storm","Sun","Tiger","Tower","Wave","Wind","Wolf"];
+  const style = Math.floor(Math.random() * 3);
+  if (style === 0) return pick(adjectives) + pick(nouns);
+  if (style === 1) return pick(adjectives) + pick(nouns) + String(Math.floor(Math.random() * 99) + 1);
+  return pick(nouns) + pick(nouns);
 }
 
-function senderInitials(from: string) {
-  const name = from.split("<")[0].trim() || from;
-  const parts = name.split(/[\s@.]+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
-
-function senderName(from: string) {
+function senderName(from: string): string {
   const match = from.match(/^([^<]+)</);
   if (match) return match[1].trim();
   return from.split("@")[0];
 }
 
-const AVATAR_GRADIENTS = [
-  "from-blue-500 to-indigo-600",
-  "from-violet-500 to-purple-600",
-  "from-emerald-500 to-teal-600",
-  "from-amber-500 to-orange-600",
-  "from-rose-500 to-pink-600",
-  "from-cyan-500 to-sky-600",
-];
-
-function avatarGradient(from: string) {
-  let h = 0;
-  for (let i = 0; i < from.length; i++) h = (h * 31 + from.charCodeAt(i)) >>> 0;
-  return AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length];
+function senderInitial(from: string): string {
+  const name = senderName(from);
+  return (name.charAt(0) || "?").toUpperCase();
 }
 
-function isFacebookCode(email: InboxEmail): boolean {
-  const subject = (email.subject ?? "").toLowerCase();
-  const from = (email.fromAddress ?? "").toLowerCase();
-  const body = ((email.bodyText ?? "") + (email.bodyHtml ?? "")).toLowerCase();
+const isFacebookSender = (from: string) => /facebook/i.test(from);
 
-  const isFacebook =
-    from.includes("facebook") ||
-    subject.includes("facebook") ||
-    subject.includes("fb") ||
-    body.includes("facebook");
+const hasSecurityCode = (email: InboxEmail) =>
+  /\b\d{6}\b/.test([email.subject, email.bodyText].join(" ")) ||
+  /\b\d{8}\b/.test([email.subject, email.bodyText].join(" "));
 
-  const hasEightDigitCode = /\b\d{8}\b/.test(email.bodyText ?? "") || /\b\d{8}\b/.test(email.subject ?? "");
-
-  return isFacebook && hasEightDigitCode;
-}
+const extractCode = (email: InboxEmail): string | null => {
+  const text = [email.subject, email.bodyText].join(" ");
+  return text.match(/\b(\d{4,8})\b/)?.[1] ?? null;
+};
 
 export default function Home() {
-  const [alias, setAlias] = useState(randomAlias);
-  const [domainId, setDomainId] = useState<number | null>(null);
-  const [copiedAddress, setCopiedAddress] = useState(false);
-  const [anyAddress, setAnyAddress] = useState("");
+  const [alias, setAlias] = useState(() => generatePrefix());
+  const [selectedDomain, setSelectedDomain] = useState("");
+  const [domainOpen, setDomainOpen] = useState(false);
   const [activeAddress, setActiveAddress] = useState("");
+  const [directInput, setDirectInput] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [codeCopied, setCodeCopied] = useState<number | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [search, setSearch] = useState("");
   const [emails, setEmails] = useState<InboxEmail[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const domainRef = useRef<HTMLDivElement>(null);
 
   const { tier, isSignedIn } = useUserTier();
-  const isFree = tier === "free";
-  const isPremium = tier === "premium";
-
-  const { data: subdomains } = useListSubdomains({ query: { queryKey: getListSubdomainsQueryKey() } });
+  const { data: subdomainsData } = useListSubdomains({ query: { queryKey: getListSubdomainsQueryKey() } });
+  const domains = subdomainsData ?? [];
 
   useEffect(() => {
-    if (subdomains && subdomains.length > 0 && domainId === null) {
-      setDomainId(subdomains[0].id);
-    }
-  }, [subdomains, domainId]);
+    if (!domains.length) return;
+    const stillValid = domains.some((d) => d.name === selectedDomain);
+    if (!stillValid) setSelectedDomain(domains[0].name);
+  }, [domains]);
 
-  const selectedDomain = subdomains?.find((s) => s.id === domainId);
-  const fullAddress = selectedDomain && alias.trim()
-    ? `${alias.trim().toLowerCase()}@${selectedDomain.name}`
-    : "";
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (domainRef.current && !domainRef.current.contains(e.target as Node)) {
+        setDomainOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const load = useCallback(async (address: string, silent = false) => {
     if (!address) return;
@@ -104,7 +91,6 @@ export default function Home() {
     try {
       const data = await fetchInbox(address);
       setEmails(data.emails);
-      setLastRefreshed(new Date());
     } catch (e: unknown) {
       setError((e as Error).message ?? "Failed to load inbox");
     } finally {
@@ -113,337 +99,516 @@ export default function Home() {
     }
   }, []);
 
-  const openInbox = (address: string) => {
-    if (!address) return;
-    setActiveAddress(address);
-    setSelectedId(null);
-    setEmails([]);
-    setError(null);
-    load(address);
-  };
-
-  useEffect(() => {
-    if (!activeAddress) return;
-    if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
-    autoRefreshRef.current = setInterval(() => load(activeAddress, true), 5000);
-    return () => { if (autoRefreshRef.current) clearInterval(autoRefreshRef.current); };
+  const doRefetch = useCallback(() => {
+    if (activeAddress) load(activeAddress, true);
   }, [activeAddress, load]);
 
   useEffect(() => {
-    if (fullAddress && !activeAddress) openInbox(fullAddress);
-  }, [fullAddress]);
+    if (!autoRefresh || !activeAddress) return;
+    const interval = setInterval(doRefetch, AUTO_REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [autoRefresh, activeAddress, doRefetch]);
 
-  const handleSelect = async (email: InboxEmail) => {
-    setSelectedId((prev) => prev === email.id ? null : email.id);
-    if (!email.isRead) {
-      await markEmailRead(email.id);
-      setEmails((prev) => prev.map((e) => e.id === email.id ? { ...e, isRead: true } : e));
+  useEffect(() => {
+    if (!activeAddress) return;
+    const interval = setInterval(() => load(activeAddress, true), 5000);
+    return () => clearInterval(interval);
+  }, [activeAddress, load]);
+
+  const openInbox = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const domain = selectedDomain || domains[0]?.name;
+    if (!domain) return;
+    const prefix = alias.trim().toLowerCase() || generatePrefix();
+    const addr = `${prefix}@${domain}`;
+    setAlias(prefix);
+    setActiveAddress(addr);
+    setSelectedId(null);
+    setEmails([]);
+    setError(null);
+    load(addr);
+  };
+
+  const handleShuffle = () => {
+    const domain = selectedDomain || domains[0]?.name;
+    if (!domain) return;
+    const prefix = generatePrefix();
+    const addr = `${prefix}@${domain}`;
+    setAlias(prefix);
+    setActiveAddress(addr);
+    setSelectedId(null);
+    setEmails([]);
+    load(addr);
+  };
+
+  const openDirectInbox = (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = directInput.trim().toLowerCase();
+    if (!val.includes("@")) return;
+    const [a, d] = val.split("@");
+    setAlias(a);
+    setSelectedDomain(d);
+    setActiveAddress(val);
+    setSelectedId(null);
+    setEmails([]);
+    setSearch("");
+    setDirectInput("");
+    load(val);
+  };
+
+  const handleCopy = () => {
+    if (!activeAddress) return;
+    navigator.clipboard.writeText(activeAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyCode = (id: number, code: string) => {
+    navigator.clipboard.writeText(code);
+    setCodeCopied(id);
+    setTimeout(() => setCodeCopied(null), 2000);
+  };
+
+  const clearInbox = async () => {
+    if (!activeAddress) return;
+    if (!confirm(`Delete all messages in ${activeAddress}? This cannot be undone.`)) return;
+    setClearing(true);
+    try {
+      for (const email of emails) await deleteEmail(email.id);
+      setEmails([]);
+      setSelectedId(null);
+    } catch { } finally {
+      setClearing(false);
     }
   };
 
-  const handleDelete = async (id: number, ev: React.MouseEvent) => {
+  const deleteInbox = async () => {
+    if (!activeAddress) return;
+    if (!confirm(`Delete inbox "${activeAddress}" and all its messages?`)) return;
+    setClearing(true);
+    try {
+      for (const email of emails) await deleteEmail(email.id);
+    } catch { } finally {
+      setClearing(false);
+      setActiveAddress("");
+      setAlias(generatePrefix());
+      setEmails([]);
+      setSelectedId(null);
+    }
+  };
+
+  const handleSelect = async (email: InboxEmail) => {
+    setSelectedId((prev) => (prev === email.id ? null : email.id));
+    if (!email.isRead) {
+      await markEmailRead(email.id);
+      setEmails((prev) => prev.map((e) => (e.id === email.id ? { ...e, isRead: true } : e)));
+    }
+  };
+
+  const handleDeleteEmail = async (id: number, ev: React.MouseEvent) => {
     ev.stopPropagation();
     await deleteEmail(id);
     setEmails((prev) => prev.filter((e) => e.id !== id));
     if (selectedId === id) setSelectedId(null);
   };
 
-  const copyAddress = () => {
-    if (!activeAddress) return;
-    navigator.clipboard.writeText(activeAddress);
-    setCopiedAddress(true);
-    setTimeout(() => setCopiedAddress(false), 2500);
-  };
+  const allEmails = emails;
+  const tierFiltered =
+    tier === "free"
+      ? allEmails.filter((e) => isFacebookSender(e.fromAddress ?? "") && hasSecurityCode(e))
+      : allEmails;
+  const visibleEmails = search.trim()
+    ? tierFiltered.filter((e) => {
+        const q = search.toLowerCase();
+        return (
+          e.fromAddress?.toLowerCase().includes(q) ||
+          e.subject?.toLowerCase().includes(q) ||
+          e.bodyText?.toLowerCase().includes(q)
+        );
+      })
+    : tierFiltered;
 
-  // Apply free tier filter: only show Facebook 8-digit security code emails
-  const visibleEmails = isFree ? emails.filter(isFacebookCode) : emails;
-  const hiddenCount = emails.length - visibleEmails.length;
-
-  const unreadCount = visibleEmails.filter((e) => !e.isRead).length;
+  const unread = visibleEmails.filter((e) => !e.isRead).length;
+  const hiddenCount = allEmails.length - tierFiltered.length;
   const selectedEmail = visibleEmails.find((e) => e.id === selectedId);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
 
-      {/* ── Free Tier Banner ── */}
-      {isFree && (
-        <div className="relative rounded-2xl overflow-hidden border border-yellow-500/20 bg-gradient-to-r from-yellow-500/8 to-amber-500/5 px-5 py-4">
-          <div className="flex items-start gap-3">
-            <div className="h-8 w-8 rounded-xl bg-yellow-500/15 border border-yellow-500/25 flex items-center justify-center shrink-0 mt-0.5">
-              <Lock className="h-4 w-4 text-yellow-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-yellow-300 mb-0.5">Free Plan — Limited Access</p>
-              <p className="text-xs text-yellow-200/50 leading-relaxed">
-                You can only receive <span className="text-yellow-300 font-semibold">Facebook 8-digit security codes</span>.
-                {!isSignedIn
-                  ? " Sign up for a free account to get started, or upgrade to Premium for all platforms."
-                  : " Upgrade to Premium to receive emails from all platforms with no limitations."}
-              </p>
-            </div>
-            {isSignedIn ? (
-              <div className="shrink-0">
-                <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-yellow-500/15 border border-yellow-500/25 text-yellow-300 text-xs font-bold">
-                  <Crown className="h-3 w-3" />
-                  Upgrade
-                </span>
-              </div>
-            ) : (
-              <Link
-                href="/sign-up"
-                className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold hover:bg-indigo-500/30 transition-all"
-              >
-                Sign Up
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Address Generator Card ── */}
-      <div className="relative rounded-2xl overflow-hidden">
-        {/* Gradient border effect */}
-        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-indigo-500/30 via-violet-500/15 to-transparent p-px">
-          <div className="h-full w-full rounded-2xl bg-card" />
-        </div>
-
-        {/* Top glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
-
-        <div className="relative">
-          {/* Header */}
-          <div className="px-5 pt-5 pb-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-              <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Your Temporary Email</p>
-            </div>
-
-            {/* Alias + domain row */}
-            <div className="flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-950/30 px-4 py-3 focus-within:border-indigo-500/50 focus-within:bg-indigo-950/40 transition-all">
-              <input
-                type="text"
-                value={alias}
-                onChange={(e) => setAlias(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && openInbox(fullAddress)}
-                placeholder="alias"
-                className="flex-1 min-w-0 bg-transparent text-base font-mono font-semibold text-white placeholder:text-muted-foreground focus:outline-none"
-              />
-              <span className="text-indigo-400/60 font-mono text-sm shrink-0 select-none">@</span>
-              {subdomains && subdomains.length > 0 ? (
-                <select
-                  value={domainId ?? ""}
-                  onChange={(e) => setDomainId(Number(e.target.value))}
-                  className="bg-transparent font-mono text-sm text-indigo-300 focus:outline-none cursor-pointer shrink-0 max-w-[160px]"
-                >
-                  {subdomains.map((s) => (
-                    <option key={s.id} value={s.id} className="bg-[#080d1a] text-white">{s.name}</option>
-                  ))}
-                </select>
-              ) : (
-                <span className="font-mono text-sm text-muted-foreground/40 shrink-0">no domain</span>
-              )}
-              <button
-                onClick={() => setAlias(randomAlias())}
-                title="Generate random alias"
-                className="p-2 rounded-lg text-indigo-400/60 hover:text-indigo-300 hover:bg-indigo-500/15 transition-all shrink-0"
-              >
-                <Shuffle className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex gap-3 px-5 pb-4">
-            <button
-              onClick={copyAddress}
-              disabled={!fullAddress}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all border ${
-                copiedAddress
-                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
-                  : "bg-white/5 border-border hover:bg-white/8 hover:border-white/20 text-foreground disabled:opacity-40"
-              }`}
-            >
-              {copiedAddress
-                ? <><Check className="h-4 w-4" /> Copied!</>
-                : <><Copy className="h-4 w-4" /> Copy Address</>
-              }
-            </button>
-            <button
-              onClick={() => openInbox(fullAddress)}
-              disabled={!fullAddress}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl btn-gradient disabled:opacity-40 text-white font-semibold text-sm transition-all active:scale-[0.98]"
-            >
-              <Inbox className="h-4 w-4" />
-              Open Inbox
-            </button>
-          </div>
-
-          {/* Check any address row */}
-          <div className="border-t border-border/60 px-5 py-3 flex items-center gap-2 bg-white/[0.02]">
+      {/* ── Alias + domain form ── */}
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+        <form onSubmit={openInbox} className="flex items-center gap-0 p-1">
+          <div className="flex flex-1 items-center rounded-lg border border-input bg-background focus-within:ring-1 focus-within:ring-ring min-w-0 overflow-hidden">
             <input
               type="text"
-              value={anyAddress}
-              onChange={(e) => setAnyAddress(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && anyAddress.trim() && openInbox(anyAddress.trim())}
-              placeholder={selectedDomain ? `or check any address @${selectedDomain.name}` : "or enter any full email address"}
-              className="flex-1 min-w-0 bg-transparent text-xs font-mono text-white placeholder:text-muted-foreground/40 focus:outline-none"
+              placeholder="alias"
+              value={alias}
+              onChange={(e) => setAlias(e.target.value.toLowerCase().replace(/[^a-z0-9._+-]/g, ""))}
+              className="flex-1 px-3 h-10 bg-transparent text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none min-w-0"
+            />
+            <span className="px-2 text-sm text-muted-foreground font-mono select-none shrink-0 border-l border-input h-10 flex items-center bg-muted/30">
+              @
+            </span>
+          </div>
+
+          <div className="relative shrink-0 mx-1" ref={domainRef}>
+            <button
+              type="button"
+              onClick={() => setDomainOpen(!domainOpen)}
+              className="flex items-center gap-1.5 h-10 px-3 font-mono text-sm text-foreground bg-background border border-input rounded-lg hover:bg-muted/60 transition-colors"
+            >
+              <span className="truncate max-w-[100px]">{selectedDomain || domains[0]?.name || "…"}</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform ${domainOpen ? "rotate-180" : ""}`} />
+            </button>
+            {domainOpen && domains.length > 0 && (
+              <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-xl z-50 min-w-[160px] overflow-hidden">
+                {domains.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    className={`w-full text-left px-4 py-2.5 font-mono text-sm hover:bg-muted transition-colors ${
+                      selectedDomain === d.name
+                        ? "text-violet-600 dark:text-violet-400 font-semibold bg-violet-50 dark:bg-violet-950/30"
+                        : "text-foreground"
+                    }`}
+                    onClick={() => { setSelectedDomain(d.name); setDomainOpen(false); }}
+                  >
+                    {d.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            title="Open inbox"
+            className="h-10 w-10 shrink-0 bg-violet-600 hover:bg-violet-700 text-white rounded-lg flex items-center justify-center transition-colors"
+          >
+            <ArrowRight className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleShuffle}
+            title="Generate random alias"
+            className="h-10 w-10 shrink-0 border border-input bg-background rounded-lg flex items-center justify-center hover:bg-muted transition-colors ml-1"
+          >
+            <Shuffle className="w-4 h-4" />
+          </button>
+        </form>
+
+        {/* Access any inbox */}
+        <div className="border-t border-border px-3 py-2.5 bg-muted/20">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Access any inbox</p>
+          <form onSubmit={openDirectInbox} className="flex gap-2">
+            <input
+              type="text"
+              placeholder="anything@domain.com"
+              value={directInput}
+              onChange={(e) => setDirectInput(e.target.value)}
+              className="flex-1 font-mono text-sm h-9 px-3 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
             <button
-              onClick={() => anyAddress.trim() && openInbox(anyAddress.trim())}
-              disabled={!anyAddress.trim()}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 disabled:opacity-30 text-indigo-400 hover:text-indigo-300 text-xs font-semibold transition-all border border-indigo-500/20"
+              type="submit"
+              className="h-9 w-9 shrink-0 bg-violet-600 hover:bg-violet-700 text-white rounded-md flex items-center justify-center transition-colors"
             >
-              Check <ArrowRight className="h-3.5 w-3.5" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
-          </div>
+          </form>
         </div>
       </div>
 
-      {/* ── Live Inbox ── */}
-      <div className="relative rounded-2xl overflow-hidden border border-border bg-card">
-        {/* Inbox header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-gradient-to-r from-indigo-950/30 to-transparent">
-          <div className="flex-1 min-w-0">
-            {activeAddress ? (
-              <>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                  <span className="font-mono text-sm text-white font-semibold truncate">{activeAddress}</span>
-                  <button onClick={copyAddress} className="p-1 rounded-md text-muted-foreground hover:text-indigo-400 transition-colors shrink-0">
-                    {copiedAddress ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                  </button>
-                </div>
-                <div className="flex items-center gap-3 text-xs">
-                  <span className="text-muted-foreground">{visibleEmails.length} messages</span>
-                  {unreadCount > 0 && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-bold text-[11px]">
-                      {unreadCount} unread
-                    </span>
-                  )}
-                  {lastRefreshed && (
-                    <span className="text-muted-foreground/40 text-[11px]">
-                      · updated {formatDistanceToNow(lastRefreshed, { addSuffix: true })}
-                    </span>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground/40 italic">No inbox open — enter an address above</p>
+      {/* ── Free plan banner ── */}
+      {tier === "free" && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+          <Crown className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
+          <p className="text-xs text-amber-700 dark:text-amber-400 flex-1">
+            <span className="font-semibold">Free plan</span> — Facebook verification codes only (6 &amp; 8-digit).
+          </p>
+          {!isSignedIn ? (
+            <Link
+              href="/sign-in"
+              className="text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline shrink-0 whitespace-nowrap"
+            >
+              Sign in for Premium →
+            </Link>
+          ) : null}
+        </div>
+      )}
+
+      {/* ── Inbox section ── */}
+      <div>
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Inbox</h1>
+            {activeAddress && (
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-sm text-muted-foreground bg-muted/60 border border-border rounded px-2.5 py-1">
+                  {activeAddress}
+                </span>
+                <button
+                  onClick={handleCopy}
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded border transition-all ${
+                    copied
+                      ? "bg-green-50 dark:bg-green-950/40 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400"
+                      : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-muted/50"
+                  }`}
+                >
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+                {unread > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                    {unread} new
+                  </span>
+                )}
+              </div>
             )}
           </div>
-          <button
-            onClick={() => activeAddress && load(activeAddress, true)}
-            disabled={!activeAddress || refreshing}
-            className="p-2.5 rounded-xl text-muted-foreground hover:text-indigo-400 hover:bg-indigo-500/10 transition-all disabled:opacity-30"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
-          </button>
+
+          {activeAddress && (
+            <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+              <button
+                onClick={() => setAutoRefresh((v) => !v)}
+                className={`h-8 px-2.5 gap-1.5 inline-flex items-center rounded-md border text-xs font-medium transition-colors ${
+                  autoRefresh
+                    ? "bg-violet-600 hover:bg-violet-700 text-white border-transparent"
+                    : "bg-background border-input hover:bg-muted text-foreground"
+                }`}
+                title={autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh"}
+              >
+                {autoRefresh ? <Zap className="w-3.5 h-3.5" /> : <ZapOff className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{autoRefresh ? "Auto ON" : "Auto OFF"}</span>
+              </button>
+              <button
+                onClick={doRefetch}
+                disabled={loading || refreshing}
+                className="h-8 px-2.5 gap-1.5 inline-flex items-center rounded-md border border-input bg-background hover:bg-muted text-xs font-medium transition-colors disabled:opacity-50"
+                title="Refresh"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
+              {allEmails.length > 0 && (
+                <button
+                  onClick={clearInbox}
+                  disabled={clearing}
+                  className="h-8 px-2.5 gap-1.5 inline-flex items-center rounded-md border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-medium transition-colors"
+                  title="Clear all messages"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{clearing ? "Clearing…" : "Clear"}</span>
+                </button>
+              )}
+              <button
+                onClick={deleteInbox}
+                disabled={clearing}
+                className="h-8 px-2.5 gap-1.5 inline-flex items-center rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50 text-xs font-medium transition-colors"
+                title="Delete inbox"
+              >
+                <Trash className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{clearing ? "Deleting…" : "Delete"}</span>
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Search bar */}
+        {activeAddress && allEmails.length > 0 && (
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by sender, subject or content…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-9 h-10 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Email list */}
         {loading ? (
-          <div className="divide-y divide-border">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="flex items-center gap-4 px-5 py-4 animate-pulse">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-white/8 to-white/4 shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3.5 w-36 bg-white/8 rounded-lg" />
-                  <div className="h-3 w-52 bg-white/5 rounded-lg" />
+          <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden divide-y divide-border">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="p-4 flex gap-4 animate-pulse">
+                <div className="w-10 h-10 rounded-full bg-muted shrink-0" />
+                <div className="flex-1 space-y-2 pt-1">
+                  <div className="flex justify-between gap-4">
+                    <div className="h-4 w-36 bg-muted rounded" />
+                    <div className="h-3 w-16 bg-muted rounded" />
+                  </div>
+                  <div className="h-4 w-1/2 bg-muted rounded" />
+                  <div className="h-3 w-full bg-muted rounded" />
                 </div>
               </div>
             ))}
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-14 text-center px-6">
-            <div className="h-14 w-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mb-4">
-              <Mail className="h-7 w-7 text-rose-400/60" />
+          <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-6 text-center">
+            <p className="text-sm font-semibold text-red-700 dark:text-red-400">{error}</p>
+            <p className="text-xs text-muted-foreground mt-1">Make sure this domain is registered in Settings</p>
+          </div>
+        ) : !activeAddress ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-100 dark:from-violet-950/40 dark:to-indigo-950/40 flex items-center justify-center mb-6 shadow-sm">
+              <Inbox className="w-9 h-9 text-violet-400" />
             </div>
-            <p className="text-sm font-semibold text-white">{error}</p>
-            <p className="text-xs text-muted-foreground mt-1.5">Make sure this domain is registered in Settings</p>
+            <h2 className="text-xl font-semibold mb-2">Pick an inbox</h2>
+            <p className="text-muted-foreground max-w-sm text-sm leading-relaxed mb-6">
+              Type any alias above and choose a domain — or hit the shuffle button to get a random address instantly.
+            </p>
+            {domains.length > 0 && (
+              <div className="flex flex-wrap gap-2 justify-center">
+                {domains.map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => {
+                      setSelectedDomain(d.name);
+                      const prefix = generatePrefix();
+                      const addr = `${prefix}@${d.name}`;
+                      setAlias(prefix);
+                      setActiveAddress(addr);
+                      load(addr);
+                    }}
+                    className="px-4 py-2 rounded-full border border-border bg-card hover:bg-muted hover:border-violet-300 dark:hover:border-violet-700 transition-colors text-sm font-mono text-muted-foreground hover:text-foreground"
+                  >
+                    @{d.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : allEmails.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center px-4">
+            <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center mb-6">
+              <Inbox className="w-9 h-9 text-muted-foreground/40" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">Inbox is empty</h2>
+            <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
+              Waiting for messages at <span className="font-mono text-foreground">{activeAddress}</span>.
+            </p>
+            <p className="text-xs text-muted-foreground/60 mt-3 flex items-center gap-1.5">
+              <Radio className="w-3 h-3 text-emerald-500" />
+              Checking every 5 seconds
+            </p>
           </div>
         ) : visibleEmails.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="relative mb-5">
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 blur-xl" />
-              <div className="relative h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-500/15 to-violet-500/15 border border-indigo-500/25 flex items-center justify-center">
-                <Inbox className="h-8 w-8 text-indigo-400/60" />
-              </div>
-            </div>
-            <p className="text-sm font-bold text-white">Inbox is empty</p>
-            {isFree && hiddenCount > 0 ? (
-              <p className="text-xs text-muted-foreground mt-1.5 max-w-xs">
-                {hiddenCount} email{hiddenCount > 1 ? "s" : ""} received but hidden on Free plan.{" "}
-                <span className="text-yellow-400 font-semibold">Upgrade to Premium</span> to see all emails.
-              </p>
+          <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+            <Search className="w-10 h-10 text-muted-foreground/30 mb-4" />
+            {search ? (
+              <>
+                <p className="text-sm font-semibold">No results for "{search}"</p>
+                <button onClick={() => setSearch("")} className="text-xs text-violet-600 dark:text-violet-400 hover:underline mt-2">
+                  Clear search
+                </button>
+              </>
             ) : (
-              <p className="text-xs text-muted-foreground mt-1.5">Share your address and emails will appear here instantly</p>
+              <>
+                <p className="text-sm font-semibold">No matching emails</p>
+                {tier === "free" && hiddenCount > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1.5 max-w-xs">
+                    {hiddenCount} email{hiddenCount > 1 ? "s" : ""} received but hidden on Free plan.
+                  </p>
+                )}
+              </>
             )}
-            <div className="flex items-center gap-2 mt-5 text-[11px] text-emerald-400/70 bg-emerald-500/8 border border-emerald-500/15 rounded-full px-4 py-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Live · checking every 5 seconds
-            </div>
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden divide-y divide-border">
             {visibleEmails.map((email) => {
               const isSelected = selectedId === email.id;
-              const grad = avatarGradient(email.fromAddress);
+              const code = extractCode(email);
               return (
                 <div key={email.id}>
                   <div
-                    className={`group flex items-center gap-4 px-5 py-4 cursor-pointer transition-all ${
-                      isSelected
-                        ? "bg-gradient-to-r from-indigo-950/40 to-transparent border-l-2 border-indigo-500"
-                        : "hover:bg-white/[0.025] border-l-2 border-transparent"
-                    }`}
+                    className={`group p-4 flex gap-4 cursor-pointer transition-all hover:bg-muted/40 ${isSelected ? "bg-muted/30" : ""}`}
                     onClick={() => handleSelect(email)}
                   >
                     {/* Avatar */}
-                    <div className={`h-10 w-10 rounded-full bg-gradient-to-br ${grad} flex items-center justify-center shrink-0 text-white text-xs font-bold shadow-md`}>
-                      {senderInitials(email.fromAddress)}
+                    <div className="relative shrink-0">
+                      {!email.isRead && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-violet-500 border-2 border-card" />
+                      )}
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                          !email.isRead
+                            ? "bg-gradient-to-br from-violet-500 to-purple-600 text-white"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {senderInitial(email.fromAddress)}
+                      </div>
                     </div>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        {!email.isRead && (
-                          <div className="h-2 w-2 rounded-full bg-indigo-400 shrink-0 shadow-sm shadow-indigo-400/50" />
-                        )}
-                        <span className={`text-sm truncate ${email.isRead ? "text-muted-foreground" : "text-white font-semibold"}`}>
+                      <div className="flex justify-between items-center mb-0.5 gap-2">
+                        <span className={`truncate text-sm font-semibold ${email.isRead ? "text-muted-foreground" : "text-foreground"}`}>
                           {senderName(email.fromAddress)}
                         </span>
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
+                          {formatDistanceToNow(new Date(email.receivedAt), { addSuffix: true })}
+                        </span>
                       </div>
-                      <p className={`text-xs truncate ${email.isRead ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
-                        {email.subject}
+                      <p className={`text-xs truncate mb-1.5 ${email.isRead ? "text-muted-foreground/60" : "font-semibold text-foreground/80"}`}>
+                        {email.subject || "(No Subject)"}
                       </p>
+                      {code && (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg text-sm font-bold tracking-widest bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-sm">
+                            {code}
+                          </span>
+                          <button
+                            className={`text-[11px] font-semibold px-2 py-0.5 rounded border transition-all ${
+                              codeCopied === email.id
+                                ? "bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400"
+                                : "bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                            }`}
+                            onClick={(e) => { e.stopPropagation(); copyCode(email.id, code); }}
+                          >
+                            {codeCopied === email.id ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Time + delete */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[11px] text-muted-foreground/30 hidden sm:block font-mono">
-                        {formatDistanceToNow(new Date(email.receivedAt), { addSuffix: false })}
-                      </span>
-                      <button
-                        onClick={(e) => handleDelete(email.id, e)}
-                        className="p-1.5 rounded-lg hover:bg-rose-500/15 text-muted-foreground/20 hover:text-rose-400 transition-all opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                      {isSelected
-                        ? <ChevronDown className="h-4 w-4 text-indigo-400" />
-                        : <ChevronRight className="h-4 w-4 text-muted-foreground/20" />}
-                    </div>
+                    {/* Delete */}
+                    <button
+                      onClick={(e) => handleDeleteEmail(email.id, e)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-muted-foreground/30 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100 shrink-0 self-start mt-0.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
-                  {/* Email reader */}
+                  {/* Inline email reader */}
                   {isSelected && selectedEmail && (
-                    <div className="border-t border-border bg-gradient-to-b from-indigo-950/20 to-transparent">
-                      <div className="px-5 py-4 border-b border-border/60 space-y-2">
-                        <p className="text-base font-bold text-white">{selectedEmail.subject}</p>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono">
-                          <span><span className="text-muted-foreground/40">From </span><span className="text-slate-300">{selectedEmail.fromAddress}</span></span>
-                          <span><span className="text-muted-foreground/40">To </span><span className="text-indigo-400">{selectedEmail.toAddress}</span></span>
-                          <span className="text-muted-foreground/30">{format(new Date(selectedEmail.receivedAt), "MMM d, yyyy · HH:mm")}</span>
+                    <div className="border-t border-border bg-muted/20">
+                      <div className="px-5 py-4 border-b border-border/60 space-y-1.5">
+                        <p className="text-base font-bold text-foreground">{selectedEmail.subject}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono text-muted-foreground">
+                          <span>
+                            <span className="opacity-60">From </span>
+                            <span className="text-foreground">{selectedEmail.fromAddress}</span>
+                          </span>
+                          <span>
+                            <span className="opacity-60">To </span>
+                            <span className="text-violet-600 dark:text-violet-400">{selectedEmail.toAddress}</span>
+                          </span>
+                          <span className="opacity-40">
+                            {format(new Date(selectedEmail.receivedAt), "MMM d, yyyy · HH:mm")}
+                          </span>
                         </div>
                       </div>
                       <div className="px-5 py-5">
@@ -455,29 +620,15 @@ export default function Home() {
               );
             })}
 
-            {/* Premium upsell when emails are hidden */}
-            {isFree && hiddenCount > 0 && (
-              <div className="flex items-center gap-3 px-5 py-4 bg-gradient-to-r from-yellow-500/5 to-transparent border-l-2 border-yellow-500/30">
-                <div className="h-10 w-10 rounded-full bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
-                  <Lock className="h-4 w-4 text-yellow-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-yellow-300">
-                    {hiddenCount} email{hiddenCount > 1 ? "s" : ""} hidden
-                  </p>
-                  <p className="text-xs text-yellow-200/40">Upgrade to Premium to unlock all emails</p>
-                </div>
-                <Crown className="h-4 w-4 text-yellow-400 shrink-0" />
+            {/* Hidden emails upsell */}
+            {tier === "free" && hiddenCount > 0 && (
+              <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 dark:bg-amber-950/20">
+                <Crown className="w-4 h-4 text-amber-500 shrink-0" />
+                <p className="text-xs text-amber-700 dark:text-amber-400 flex-1">
+                  <span className="font-semibold">{hiddenCount} email{hiddenCount > 1 ? "s" : ""} hidden</span> — upgrade to Premium to unlock all emails.
+                </p>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Footer */}
-        {visibleEmails.length > 0 && (
-          <div className="flex items-center justify-center gap-2 px-5 py-3 border-t border-border bg-white/[0.015]">
-            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[11px] text-muted-foreground/30">Live inbox · updates every 5 seconds</span>
           </div>
         )}
       </div>
