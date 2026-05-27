@@ -64,7 +64,7 @@ export default function InboxView() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const t = setInterval(() => load(true), 5000);
+    const t = setInterval(() => load(true), 15000);
     return () => clearInterval(t);
   }, [load]);
 

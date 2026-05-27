@@ -8,7 +8,6 @@ import { useListSubdomains, getListSubdomainsQueryKey } from "@workspace/api-cli
 import { fetchInbox, markEmailRead, deleteEmail, InboxEmail } from "@/lib/api";
 import { formatDistanceToNow, format } from "date-fns";
 import { EmailBody } from "@/components/email-body";
-import { useSSE } from "@/hooks/use-sse";
 
 const ADJECTIVES = ["swift", "dark", "cool", "bold", "quick", "lazy", "bright", "wild", "silent", "sharp"];
 const NOUNS = ["fox", "bear", "hawk", "wolf", "lynx", "raven", "pike", "crane", "viper", "jade"];
@@ -101,14 +100,10 @@ export default function Home() {
     load(address);
   };
 
-  // SSE: instant updates when a new email arrives
-  useSSE(activeAddress || null, () => load(activeAddress, true));
-
-  // Fallback polling every 30s (SSE handles the real-time side)
   useEffect(() => {
     if (!activeAddress) return;
     if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
-    autoRefreshRef.current = setInterval(() => load(activeAddress, true), 30000);
+    autoRefreshRef.current = setInterval(() => load(activeAddress, true), 5000);
     return () => { if (autoRefreshRef.current) clearInterval(autoRefreshRef.current); };
   }, [activeAddress, load]);
 
