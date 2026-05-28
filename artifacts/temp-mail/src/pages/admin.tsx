@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Globe, Plus, Trash2, Loader2, Eye, EyeOff,
   Webhook, Copy, Check, Code2, Lock,
-  Activity, ShieldCheck, AlertCircle, Mail, Users, Crown, Zap, RefreshCw, Send, ExternalLink,
+  Activity, ShieldCheck, AlertCircle, Mail, Zap, RefreshCw, Send, ExternalLink,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -435,188 +435,13 @@ function WebhookPanel() {
   );
 }
 
-/* ─── Users Panel ────────────────────────────────────────── */
-type ClerkUser = {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  username: string;
-  tier: string;
-  createdAt: string;
-};
-
-function UsersPanel() {
-  const [users, setUsers] = useState<ClerkUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${BASE}/api/admin/clerk-users`, {
-        headers: { "x-admin-password": ADMIN_PASSWORD },
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error((j as { error?: string }).error ?? "Failed to load users");
-      }
-      const data = await res.json() as { users: ClerkUser[] };
-      setUsers(data.users);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [BASE]);
-
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
-
-  const setTier = async (clerkId: string, tier: "free" | "premium") => {
-    setUpdatingId(clerkId);
-    try {
-      const res = await fetch(`${BASE}/api/admin/clerk-users/${clerkId}/tier`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-admin-password": ADMIN_PASSWORD },
-        body: JSON.stringify({ tier }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error((j as { error?: string }).error ?? "Failed to update tier");
-      }
-      setUsers((prev) =>
-        prev.map((u) => u.id === clerkId ? { ...u, tier } : u),
-      );
-    } catch (e) {
-      alert((e as Error).message);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="divide-y divide-border rounded-2xl border border-border bg-card overflow-hidden">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="flex items-center gap-4 px-5 py-4 animate-pulse">
-            <div className="h-10 w-10 rounded-full bg-white/8 shrink-0" />
-            <div className="flex-1 space-y-2">
-              <div className="h-3.5 w-40 bg-white/8 rounded" />
-              <div className="h-3 w-56 bg-white/5 rounded" />
-            </div>
-            <div className="h-8 w-24 bg-white/5 rounded-xl" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center rounded-2xl border border-rose-500/20 bg-rose-500/5">
-        <AlertCircle className="h-8 w-8 text-rose-400/60 mb-3" />
-        <p className="text-sm font-semibold text-white">{error}</p>
-        <button onClick={fetchUsers} className="mt-3 text-xs text-indigo-400 hover:underline">Retry</button>
-      </div>
-    );
-  }
-
-  if (users.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center rounded-2xl border border-border bg-card">
-        <Users className="h-10 w-10 text-muted-foreground/20 mb-3" />
-        <p className="text-sm font-bold text-white">No users yet</p>
-        <p className="text-xs text-muted-foreground mt-1">Users will appear here once they sign up</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground/50">{users.length} registered user{users.length !== 1 ? "s" : ""}</p>
-        <button
-          onClick={fetchUsers}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-indigo-400 transition-colors px-2.5 py-1 rounded-lg hover:bg-indigo-500/10"
-        >
-          <RefreshCw className="h-3.5 w-3.5" /> Refresh
-        </button>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card overflow-hidden divide-y divide-border">
-        {users.map((user) => {
-          const isPremium = user.tier === "premium";
-          const isUpdating = updatingId === user.id;
-          const displayName = user.firstName || user.username || user.email.split("@")[0];
-
-          return (
-            <div key={user.id} className="flex items-center gap-4 px-5 py-4 hover:bg-white/[0.02] transition-colors">
-              {/* Avatar */}
-              <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-bold ${
-                isPremium ? "bg-gradient-to-br from-emerald-500 to-teal-600" : "bg-gradient-to-br from-violet-500 to-purple-600"
-              }`}>
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-white truncate">{displayName}</span>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                    isPremium
-                      ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
-                      : "bg-white/5 border-white/10 text-muted-foreground"
-                  }`}>
-                    {isPremium ? <Crown className="h-2.5 w-2.5" /> : <Zap className="h-2.5 w-2.5" />}
-                    {isPremium ? "PREMIUM" : "FREE"}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground/50 truncate mt-0.5">{user.email}</p>
-              </div>
-
-              {/* Toggle */}
-              <div className="shrink-0">
-                {isUpdating ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
-                ) : isPremium ? (
-                  <button
-                    onClick={() => setTier(user.id, "free")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 text-xs font-semibold transition-all"
-                  >
-                    <Zap className="h-3 w-3" /> Downgrade
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setTier(user.id, "premium")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold transition-all"
-                  >
-                    <Crown className="h-3 w-3" /> Upgrade
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <p className="text-xs text-muted-foreground/30 px-1">
-        Changes take effect immediately on next page load for the user.
-      </p>
-    </div>
-  );
-}
-
 /* ─── Admin Page ──────────────────────────────────────────── */
 export default function AdminPage() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === "1");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"domains" | "webhook" | "users">("domains");
+  const [tab, setTab] = useState<"domains" | "webhook">("domains");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -708,7 +533,7 @@ export default function AdminPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-card border border-border rounded-xl p-1">
-        {(["domains", "users", "webhook"] as const).map((t) => (
+        {(["domains", "webhook"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -718,12 +543,12 @@ export default function AdminPage() {
                 : "text-muted-foreground hover:text-foreground hover:bg-white/5"
             }`}
           >
-            {t === "domains" ? "Domains" : t === "users" ? "Users" : "Webhook"}
+            {t === "domains" ? "Domains" : "Webhook"}
           </button>
         ))}
       </div>
 
-      {tab === "domains" ? <DomainsPanel /> : tab === "users" ? <UsersPanel /> : <WebhookPanel />}
+      {tab === "domains" ? <DomainsPanel /> : <WebhookPanel />}
     </div>
   );
 }
