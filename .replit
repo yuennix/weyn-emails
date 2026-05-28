@@ -72,3 +72,8 @@ externalPort = 6000
 [[ports]]
 localPort = 25658
 externalPort = 8008
+
+[userenv]
+
+[userenv.shared]
+ADMIN_PASSWORD = "yuennix"

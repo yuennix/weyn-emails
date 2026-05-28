@@ -20485,27 +20485,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router6;
+    module.exports = Router7;
     module.exports.Route = Route;
-    function Router6(options) {
-      if (!(this instanceof Router6)) {
-        return new Router6(options);
+    function Router7(options) {
+      if (!(this instanceof Router7)) {
+        return new Router7(options);
       }
       const opts = options || {};
-      function router6(req, res, next) {
-        router6.handle(req, res, next);
+      function router7(req, res, next) {
+        router7.handle(req, res, next);
       }
-      Object.setPrototypeOf(router6, this);
-      router6.caseSensitive = opts.caseSensitive;
-      router6.mergeParams = opts.mergeParams;
-      router6.params = {};
-      router6.strict = opts.strict;
-      router6.stack = [];
-      return router6;
+      Object.setPrototypeOf(router7, this);
+      router7.caseSensitive = opts.caseSensitive;
+      router7.mergeParams = opts.mergeParams;
+      router7.params = {};
+      router7.strict = opts.strict;
+      router7.stack = [];
+      return router7;
     }
-    Router6.prototype = function() {
+    Router7.prototype = function() {
     };
-    Router6.prototype.param = function param(name, fn) {
+    Router7.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20525,7 +20525,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router6.prototype.handle = function handle(req, res, callback) {
+    Router7.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20652,7 +20652,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router6.prototype.use = function use(handler) {
+    Router7.prototype.use = function use(handler) {
       let offset = 0;
       let path3 = "/";
       if (typeof handler !== "function") {
@@ -20685,7 +20685,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router6.prototype.route = function route(path3) {
+    Router7.prototype.route = function route(path3) {
       const route2 = new Route(path3);
       const layer = new Layer(path3, {
         sensitive: this.caseSensitive,
@@ -20700,7 +20700,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router6.prototype[method] = function(path3) {
+      Router7.prototype[method] = function(path3) {
         const route = this.route(path3);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -20883,13 +20883,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router6 = require_router();
+    var Router7 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router6 = null;
+      var router7 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -20898,13 +20898,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router6 === null) {
-            router6 = new Router6({
+          if (router7 === null) {
+            router7 = new Router7({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router6;
+          return router7;
         }
       });
     };
@@ -20975,15 +20975,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router6 = this.router;
+      var router7 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router6.use(path3, fn2);
+          return router7.use(path3, fn2);
         }
         debug7(".use app under %s", path3);
         fn2.mountpath = path3;
         fn2.parent = this;
-        router6.use(path3, function mounted_app(req, res, next) {
+        router7.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23510,7 +23510,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router6 = require_router();
+    var Router7 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23532,8 +23532,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router6.Route;
-    exports.Router = Router6;
+    exports.Route = Router7.Route;
+    exports.Router = Router7;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -31293,7 +31293,7 @@ var require_micromatch = __commonJS({
 });
 
 // src/app.ts
-var import_express6 = __toESM(require_express2(), 1);
+var import_express8 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path from "node:path";
@@ -39579,7 +39579,7 @@ var clerkMiddleware = (options = {}) => {
 };
 
 // src/routes/index.ts
-var import_express5 = __toESM(require_express2(), 1);
+var import_express7 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -62631,13 +62631,74 @@ router4.get("/addresses/:id/emails", async (req, res) => {
 });
 var addresses_default = router4;
 
-// src/routes/index.ts
+// src/routes/admin.ts
+var import_express5 = __toESM(require_express2(), 1);
+
+// src/middlewares/requireAdmin.ts
+function requireAdmin(req, res, next) {
+  const pwd = process.env.ADMIN_PASSWORD;
+  if (!pwd) {
+    res.status(500).json({ error: "Admin password is not configured on the server" });
+    return;
+  }
+  const provided = req.headers["x-admin-password"];
+  if (!provided || provided !== pwd) {
+    res.status(403).json({ error: "Forbidden: admin password required" });
+    return;
+  }
+  next();
+}
+
+// src/routes/admin.ts
 var router5 = (0, import_express5.Router)();
-router5.use(health_default);
-router5.use(subdomains_default);
-router5.use(emails_default);
-router5.use(addresses_default);
-var routes_default = router5;
+router5.get("/admin/webhook-logs", requireAdmin, (_req, res) => {
+  res.json({ logs: getWebhookLogs() });
+});
+router5.get("/admin/clerk-users", requireAdmin, async (_req, res) => {
+  try {
+    const client = await clerkClient();
+    const response = await client.users.getUserList({ limit: 100 });
+    const users = response.data.map((u) => ({
+      id: u.id,
+      email: u.emailAddresses[0]?.emailAddress ?? "",
+      firstName: u.firstName ?? "",
+      lastName: u.lastName ?? "",
+      username: u.username ?? "",
+      tier: u.publicMetadata?.tier ?? "free",
+      createdAt: new Date(u.createdAt).toISOString()
+    }));
+    res.json({ users });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to list users";
+    res.status(500).json({ error: message });
+  }
+});
+router5.post("/admin/clerk-users/:clerkId/tier", requireAdmin, async (req, res) => {
+  const { clerkId } = req.params;
+  const { tier } = req.body;
+  if (!tier || !["free", "premium"].includes(tier)) {
+    res.status(400).json({ error: "tier must be 'free' or 'premium'" });
+    return;
+  }
+  try {
+    const client = await clerkClient();
+    await client.users.updateUserMetadata(clerkId, { publicMetadata: { tier } });
+    res.json({ ok: true, clerkId, tier });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to update tier";
+    res.status(500).json({ error: message });
+  }
+});
+var admin_default = router5;
+
+// src/routes/index.ts
+var router6 = (0, import_express7.Router)();
+router6.use(health_default);
+router6.use(subdomains_default);
+router6.use(emails_default);
+router6.use(addresses_default);
+router6.use(admin_default);
+var routes_default = router6;
 
 // src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
@@ -63566,11 +63627,11 @@ function parsePathRewriteRules(rewriteConfig) {
 var debug4 = Debug.extend("router");
 async function getTarget(req, config2) {
   let newTarget;
-  const router6 = config2.router;
-  if (isPlainObject2(router6)) {
-    newTarget = getTargetFromProxyTable(req, router6);
-  } else if (typeof router6 === "function") {
-    newTarget = await router6(req);
+  const router7 = config2.router;
+  if (isPlainObject2(router7)) {
+    newTarget = getTargetFromProxyTable(req, router7);
+  } else if (typeof router7 === "function") {
+    newTarget = await router7(req);
   }
   return newTarget;
 }
@@ -63822,7 +63883,7 @@ function clerkProxyMiddleware() {
 
 // src/app.ts
 var __dirname2 = path.dirname(fileURLToPath(import.meta.url));
-var app = (0, import_express6.default)();
+var app = (0, import_express8.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -63838,8 +63899,8 @@ app.use(
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use((0, import_cors.default)({ credentials: true, origin: true }));
-app.use(import_express6.default.json());
-app.use(import_express6.default.urlencoded({ extended: true }));
+app.use(import_express8.default.json());
+app.use(import_express8.default.urlencoded({ extended: true }));
 app.use(
   clerkMiddleware((req) => ({
     publishableKey: publishableKeyFromHost(
@@ -63852,7 +63913,7 @@ app.use("/api", routes_default);
 app.use("/", routes_default);
 var publicDir = path.resolve(__dirname2, "public");
 if (process.env.NODE_ENV === "production" && existsSync(publicDir)) {
-  app.use(import_express6.default.static(publicDir));
+  app.use(import_express8.default.static(publicDir));
   app.get("/{*path}", (_req, res) => {
     res.sendFile(path.join(publicDir, "index.html"));
   });
