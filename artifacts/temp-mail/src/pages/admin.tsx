@@ -17,6 +17,7 @@ import {
   Inbox, ChevronRight, ChevronDown, Search, X, MailOpen,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
+import DOMPurify from "dompurify";
 
 const ADMIN_PASSWORD = "yuennix";
 const SESSION_KEY = "admin_authed";
@@ -635,7 +636,7 @@ function AdminWebmailPanel() {
                       </div>
                       <div className="px-5 py-4">
                         {email.bodyHtml
-                          ? <div className="prose prose-sm prose-invert max-w-none text-xs" dangerouslySetInnerHTML={{ __html: email.bodyHtml }} />
+                          ? <div className="prose prose-sm prose-invert max-w-none text-xs" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.bodyHtml) }} />
                           : <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed">{email.bodyText || "(empty)"}</pre>
                         }
                       </div>
