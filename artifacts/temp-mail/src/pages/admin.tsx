@@ -4,14 +4,19 @@ import {
   useCreateSubdomain,
   useDeleteSubdomain,
   getListSubdomainsQueryKey,
+  useListRecentEmails,
+  useMarkEmailRead,
+  useDeleteEmail,
+  getListRecentEmailsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Globe, Plus, Trash2, Loader2, Eye, EyeOff,
   Webhook, Copy, Check, Code2, Lock,
   Activity, ShieldCheck, AlertCircle, Mail, Zap, RefreshCw, Send, ExternalLink,
+  Inbox, ChevronRight, ChevronDown, Search, X, MailOpen,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 
 const ADMIN_PASSWORD = "yuennix";
 const SESSION_KEY = "admin_authed";
@@ -435,13 +440,229 @@ function WebhookPanel() {
   );
 }
 
+/* ─── Admin Webmail Panel ─────────────────────────────────── */
+const AVATAR_COLORS = [
+  "bg-blue-600","bg-violet-600","bg-emerald-600",
+  "bg-amber-600","bg-rose-600","bg-cyan-600","bg-indigo-600","bg-teal-600",
+];
+function avatarColor(from: string) {
+  let h = 0;
+  for (let i = 0; i < from.length; i++) h = (h * 31 + from.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+function senderInitials(from: string) {
+  const name = from.split("<")[0].trim() || from;
+  const parts = name.split(/[\s@.]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+function senderDisplayName(from: string) {
+  const match = from.match(/^([^<]+)</);
+  return match ? match[1].trim() : from.split("@")[0];
+}
+
+function AdminWebmailPanel() {
+  const queryClient = useQueryClient();
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+
+  const { data: emails, isLoading, refetch } = useListRecentEmails(
+    { limit: 200 },
+    { query: { queryKey: getListRecentEmailsQueryKey({ limit: 200 }), refetchInterval: 8000 } }
+  );
+
+  const markRead = useMarkEmailRead({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListRecentEmailsQueryKey() }),
+    },
+  });
+
+  const deleteEmail = useDeleteEmail({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListRecentEmailsQueryKey() }),
+    },
+  });
+
+  const handleExpand = (id: number, isRead: boolean) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+    if (!isRead) markRead.mutate({ id });
+  };
+
+  const filtered = (emails ?? []).filter((e) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      e.fromAddress?.toLowerCase().includes(q) ||
+      e.toAddress?.toLowerCase().includes(q) ||
+      e.subject?.toLowerCase().includes(q) ||
+      e.subdomainName?.toLowerCase().includes(q)
+    );
+  });
+
+  const unread = (emails ?? []).filter((e) => !e.isRead).length;
+
+  return (
+    <div className="space-y-4">
+      {/* Stats bar */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total", value: emails?.length ?? 0, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+          { label: "Unread", value: unread, color: "text-sky-400", bg: "bg-sky-500/10 border-sky-500/20" },
+          { label: "Domains", value: [...new Set((emails ?? []).map(e => e.subdomainName))].length, color: "text-violet-400", bg: "bg-violet-500/10 border-violet-500/20" },
+        ].map(({ label, value, color, bg }) => (
+          <div key={label} className={`rounded-xl border ${bg} px-4 py-3 text-center`}>
+            <p className={`text-xl font-black ${color}`}>{value}</p>
+            <p className="text-[11px] text-muted-foreground/60 font-semibold uppercase tracking-widest mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Search + refresh */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search sender, subject, domain…"
+            className="w-full pl-9 pr-9 h-10 rounded-xl border border-border bg-card text-sm text-white placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-emerald-500/40 focus:border-emerald-500/40 transition-all"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-white transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => refetch()}
+          className="h-10 w-10 shrink-0 rounded-xl border border-border bg-card hover:bg-emerald-500/10 hover:border-emerald-500/30 text-muted-foreground hover:text-emerald-400 transition-all flex items-center justify-center"
+          title="Refresh"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Email list */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        {isLoading ? (
+          <div className="divide-y divide-border">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-5 py-4 animate-pulse">
+                <div className="h-10 w-10 rounded-full bg-white/8 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 w-44 bg-white/8 rounded" />
+                  <div className="h-3 w-64 bg-white/5 rounded" />
+                </div>
+                <div className="h-3 w-16 bg-white/5 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center mb-4">
+              <Inbox className="h-7 w-7 text-emerald-400/40" />
+            </div>
+            <p className="text-sm font-bold text-white">{search ? "No results found" : "No emails yet"}</p>
+            <p className="text-xs text-muted-foreground mt-1">{search ? "Try a different search term" : "Emails will appear here as they arrive"}</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {filtered.map((email) => {
+              const expanded = expandedId === email.id;
+              const color = avatarColor(email.fromAddress);
+              return (
+                <div key={email.id}>
+                  <div
+                    className={`group flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all ${
+                      expanded ? "bg-emerald-500/5 border-l-2 border-emerald-500" : "hover:bg-white/[0.025] border-l-2 border-transparent"
+                    }`}
+                    onClick={() => handleExpand(email.id, email.isRead)}
+                  >
+                    {/* Avatar */}
+                    <div className={`h-9 w-9 rounded-full ${color} flex items-center justify-center shrink-0 text-white text-xs font-bold`}>
+                      {senderInitials(email.fromAddress)}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        {!email.isRead && <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />}
+                        <span className={`text-sm truncate ${email.isRead ? "text-muted-foreground" : "text-white font-semibold"}`}>
+                          {senderDisplayName(email.fromAddress)}
+                        </span>
+                        <span className="text-muted-foreground/30 text-xs shrink-0">→</span>
+                        <span className="text-xs text-emerald-400/70 font-mono truncate">{email.toAddress}</span>
+                      </div>
+                      <p className={`text-xs truncate ${email.isRead ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
+                        {email.subject || "(no subject)"}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/30 font-mono">
+                          <Globe className="h-2.5 w-2.5" />{email.subdomainName}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/25">·</span>
+                        <span className="text-[10px] text-muted-foreground/30">{formatDistanceToNow(new Date(email.receivedAt), { addSuffix: true })}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteEmail.mutate({ id: email.id }); }}
+                        className="p-1.5 rounded-lg hover:bg-rose-500/15 text-muted-foreground/20 hover:text-rose-400 transition-all opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                      {email.isRead
+                        ? <MailOpen className="h-3.5 w-3.5 text-muted-foreground/20 shrink-0" />
+                        : <Mail className="h-3.5 w-3.5 text-emerald-400/60 shrink-0" />
+                      }
+                      {expanded
+                        ? <ChevronDown className="h-4 w-4 text-emerald-400 shrink-0" />
+                        : <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0" />}
+                    </div>
+                  </div>
+
+                  {/* Expanded body */}
+                  {expanded && (
+                    <div className="border-t border-border bg-background/50">
+                      <div className="px-5 py-3 border-b border-border/60 grid grid-cols-1 sm:grid-cols-2 gap-1.5 font-mono text-xs">
+                        <div><span className="text-muted-foreground/40">From: </span><span className="text-white">{email.fromAddress}</span></div>
+                        <div><span className="text-muted-foreground/40">To: </span><span className="text-emerald-400">{email.toAddress}</span></div>
+                        <div><span className="text-muted-foreground/40">Domain: </span><span className="text-muted-foreground">{email.subdomainName}</span></div>
+                        <div><span className="text-muted-foreground/40">Received: </span><span className="text-muted-foreground">{format(new Date(email.receivedAt), "MMM d, yyyy · HH:mm")}</span></div>
+                      </div>
+                      <div className="px-5 py-4">
+                        {email.bodyHtml
+                          ? <div className="prose prose-sm prose-invert max-w-none text-xs" dangerouslySetInnerHTML={{ __html: email.bodyHtml }} />
+                          : <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed">{email.bodyText || "(empty)"}</pre>
+                        }
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {filtered.length > 0 && (
+        <p className="text-xs text-muted-foreground/30 px-1 text-center">
+          Showing {filtered.length} of {emails?.length ?? 0} email{(emails?.length ?? 0) !== 1 ? "s" : ""} — no filters applied
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ─── Admin Page ──────────────────────────────────────────── */
 export default function AdminPage() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === "1");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"domains" | "webhook">("domains");
+  const [tab, setTab] = useState<"domains" | "webhook" | "webmail">("webmail");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -520,7 +741,7 @@ export default function AdminPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-white">Settings</h1>
-            <p className="text-xs text-muted-foreground">Domains · Webhook · Activity</p>
+            <p className="text-xs text-muted-foreground">Webmail · Domains · Webhook</p>
           </div>
         </div>
         <button
@@ -533,22 +754,24 @@ export default function AdminPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-card border border-border rounded-xl p-1">
-        {(["domains", "webhook"] as const).map((t) => (
+        {(["webmail", "domains", "webhook"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
               t === tab
-                ? "btn-gradient text-white"
+                ? t === "webmail"
+                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm"
+                  : "btn-gradient text-white"
                 : "text-muted-foreground hover:text-foreground hover:bg-white/5"
             }`}
           >
-            {t === "domains" ? "Domains" : "Webhook"}
+            {t === "webmail" ? "Webmail" : t === "domains" ? "Domains" : "Webhook"}
           </button>
         ))}
       </div>
 
-      {tab === "domains" ? <DomainsPanel /> : <WebhookPanel />}
+      {tab === "webmail" ? <AdminWebmailPanel /> : tab === "domains" ? <DomainsPanel /> : <WebhookPanel />}
     </div>
   );
 }

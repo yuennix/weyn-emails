@@ -12,19 +12,19 @@ import { EmailBody } from "@/components/email-body";
 const AUTO_REFRESH_INTERVAL = 15000;
 
 const THEME = {
-  btnBg:         "bg-violet-600 hover:bg-violet-700",
-  avatarGrad:    "from-violet-500 to-purple-600",
-  unreadDot:     "bg-violet-500",
-  unreadBadge:   "bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300",
-  autoOn:        "bg-violet-600 hover:bg-violet-700 text-white border-transparent",
-  domainActive:  "text-violet-600 dark:text-violet-400 font-semibold bg-violet-50 dark:bg-violet-950/30",
-  domainHover:   "hover:border-violet-300 dark:hover:border-violet-700",
-  emptyIconBg:   "from-violet-100 to-indigo-100 dark:from-violet-950/40 dark:to-indigo-950/40",
-  emptyIconColor:"text-violet-400",
-  codeGrad:      "from-violet-500 to-purple-600",
-  accentText:    "text-violet-600 dark:text-violet-400",
-  readerTo:      "text-violet-600 dark:text-violet-400",
-  ringFocus:     "focus:ring-violet-500",
+  btnBg:         "bg-blue-600 hover:bg-blue-700",
+  avatarGrad:    "from-blue-500 to-blue-700",
+  unreadDot:     "bg-blue-500",
+  unreadBadge:   "bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300",
+  autoOn:        "bg-blue-600 hover:bg-blue-700 text-white border-transparent",
+  domainActive:  "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-950/30",
+  domainHover:   "hover:border-blue-300 dark:hover:border-blue-700",
+  emptyIconBg:   "from-blue-100 to-sky-100 dark:from-blue-950/40 dark:to-sky-950/40",
+  emptyIconColor:"text-blue-400",
+  codeGrad:      "from-blue-600 to-blue-800",
+  accentText:    "text-blue-600 dark:text-blue-400",
+  readerTo:      "text-blue-600 dark:text-blue-400",
+  ringFocus:     "focus:ring-blue-500",
 };
 
 function generatePrefix(): string {
@@ -322,6 +322,19 @@ export default function Home() {
         </div>
       </div>
 
+      {/* ── Facebook-only notice ── */}
+      <div className="flex items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3">
+        <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+          <svg viewBox="0 0 24 24" className="h-5 w-5 fill-white" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-blue-300">Facebook Verification Codes Only</p>
+          <p className="text-xs text-muted-foreground/60">This inbox only shows 6 or 8-digit codes sent by Facebook.</p>
+        </div>
+      </div>
+
       {/* ── Inbox section ── */}
       <div>
         {/* Header row */}
@@ -537,19 +550,19 @@ export default function Home() {
                         {email.subject || "(No Subject)"}
                       </p>
                       {code && (
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-sm font-bold tracking-widest bg-gradient-to-r ${THEME.codeGrad} text-white shadow-sm`}>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-lg text-base font-black tracking-[0.2em] bg-gradient-to-r ${THEME.codeGrad} text-white shadow-md font-mono`}>
                             {code}
                           </span>
                           <button
-                            className={`text-[11px] font-semibold px-2 py-0.5 rounded border transition-all ${
+                            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
                               codeCopied === email.id
-                                ? "bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400"
-                                : "bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                                ? "bg-green-500/10 border-green-500/30 text-green-400"
+                                : "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
                             }`}
                             onClick={(e) => { e.stopPropagation(); copyCode(email.id, code); }}
                           >
-                            {codeCopied === email.id ? "Copied!" : "Copy"}
+                            {codeCopied === email.id ? <><Check className="w-3 h-3" />Copied!</> : <><Copy className="w-3 h-3" />Copy</>}
                           </button>
                         </div>
                       )}
