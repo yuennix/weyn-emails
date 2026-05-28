@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Globe, Plus, Trash2, Loader2, Eye, EyeOff,
   Webhook, Copy, Check, Code2, Lock,
-  Activity, ShieldCheck, AlertCircle, Mail, Users, Crown, Zap, RefreshCw,
+  Activity, ShieldCheck, AlertCircle, Mail, Users, Crown, Zap, RefreshCw, Send, ExternalLink,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -21,6 +21,42 @@ function DomainsPanel() {
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [sendingTest, setSendingTest] = useState<number | null>(null);
+  const [testResult, setTestResult] = useState<{ id: number; ok: boolean; msg: string } | null>(null);
+
+  const webhookUrl = __REPLIT_DEV_DOMAIN__
+    ? `https://${__REPLIT_DEV_DOMAIN__}/api/webhook/email`
+    : `${window.location.origin}/api/webhook/email`;
+
+  const sendTestEmail = async (sub: { id: number; name: string }) => {
+    setSendingTest(sub.id);
+    setTestResult(null);
+    try {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          from: "test-sender@example.com",
+          to: `test@${sub.name}`,
+          subject: "✅ Test Email — Weyn Mail",
+          text: "This is an automated test email injected via the admin panel to verify your inbox is working.",
+          html: "<p>This is an automated <strong>test email</strong> injected via the admin panel to verify your inbox is working.</p>",
+        }),
+      });
+      if (res.ok) {
+        setTestResult({ id: sub.id, ok: true, msg: `Delivered to test@${sub.name} — check your inbox!` });
+        queryClient.invalidateQueries({ queryKey: getListSubdomainsQueryKey() });
+      } else {
+        const j = await res.json().catch(() => ({}));
+        setTestResult({ id: sub.id, ok: false, msg: (j as { error?: string }).error ?? "Failed to send" });
+      }
+    } catch (e) {
+      setTestResult({ id: sub.id, ok: false, msg: (e as Error).message });
+    } finally {
+      setSendingTest(null);
+      setTimeout(() => setTestResult(null), 5000);
+    }
+  };
 
   const { data: subdomains, isLoading } = useListSubdomains({ query: { queryKey: getListSubdomainsQueryKey() } });
 
@@ -77,6 +113,47 @@ function DomainsPanel() {
         </p>
       )}
 
+      {/* Webhook setup info */}
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2.5">
+        <div className="flex items-center gap-2">
+          <Webhook className="h-4 w-4 text-amber-400 shrink-0" />
+          <span className="text-xs font-bold text-amber-300">Email Routing Setup Required</span>
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Configure your email provider (Mailwip, Cloudflare, ImprovMX, etc.) to forward emails to this webhook:
+        </p>
+        <div className="flex items-center gap-2 rounded-lg bg-black/30 border border-white/8 px-3 py-2">
+          <code className="font-mono text-xs text-indigo-300 flex-1 break-all">{webhookUrl}</code>
+          <button
+            onClick={() => { navigator.clipboard.writeText(webhookUrl); }}
+            className="shrink-0 p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"
+            title="Copy URL"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <a
+          href="https://mailwip.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+        >
+          <ExternalLink className="h-3 w-3" /> Open Mailwip →
+        </a>
+      </div>
+
+      {/* Test result banner */}
+      {testResult && (
+        <div className={`flex items-center gap-2.5 rounded-xl px-4 py-3 text-xs font-medium border ${
+          testResult.ok
+            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+            : "bg-rose-500/10 border-rose-500/20 text-rose-400"
+        }`}>
+          {testResult.ok ? <Check className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+          {testResult.msg}
+        </div>
+      )}
+
       {/* Domain list */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
         {isLoading ? (
@@ -116,32 +193,47 @@ function DomainsPanel() {
                   </div>
                 </div>
 
-                {deleteConfirm === sub.id ? (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-muted-foreground hidden sm:block">Remove?</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Send test email */}
+                  {deleteConfirm !== sub.id && (
                     <button
-                      onClick={() => remove.mutate({ id: sub.id })}
-                      disabled={remove.isPending}
-                      className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors disabled:opacity-40"
+                      onClick={() => sendTestEmail(sub)}
+                      disabled={sendingTest === sub.id}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 text-xs font-medium transition-all opacity-0 group-hover:opacity-100 disabled:opacity-40"
+                      title={`Send test email to test@${sub.name}`}
                     >
-                      {remove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes, remove"}
+                      {sendingTest === sub.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                      Test
                     </button>
+                  )}
+
+                  {deleteConfirm === sub.id ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground hidden sm:block">Remove?</span>
+                      <button
+                        onClick={() => remove.mutate({ id: sub.id })}
+                        disabled={remove.isPending}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors disabled:opacity-40"
+                      >
+                        {remove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes, remove"}
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(null)}
+                        className="px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground text-xs transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      onClick={() => setDeleteConfirm(null)}
-                      className="px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground text-xs transition-colors"
+                      onClick={() => setDeleteConfirm(sub.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:border-rose-500/40 hover:bg-rose-500/10 text-muted-foreground hover:text-rose-400 text-xs font-medium transition-all opacity-0 group-hover:opacity-100"
                     >
-                      Cancel
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setDeleteConfirm(sub.id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:border-rose-500/40 hover:bg-rose-500/10 text-muted-foreground hover:text-rose-400 text-xs font-medium transition-all opacity-0 group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remove
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -211,7 +303,7 @@ function WebhookPanel() {
   const webhookUrl = import.meta.env.VITE_PUBLIC_URL
     ? `${import.meta.env.VITE_PUBLIC_URL}/api/webhook/email`
     : __REPLIT_DEV_DOMAIN__
-      ? `https://${__REPLIT_DEV_DOMAIN__}:8080/api/webhook/email`
+      ? `https://${__REPLIT_DEV_DOMAIN__}/api/webhook/email`
       : `${window.location.origin}/api/webhook/email`;
 
   const fetchLogs = async () => {
