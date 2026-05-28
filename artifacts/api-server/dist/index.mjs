@@ -62656,8 +62656,7 @@ router5.get("/admin/webhook-logs", requireAdmin, (_req, res) => {
 });
 router5.get("/admin/clerk-users", requireAdmin, async (_req, res) => {
   try {
-    const client = await clerkClient();
-    const response = await client.users.getUserList({ limit: 100 });
+    const response = await clerkClient.users.getUserList({ limit: 100 });
     const users = response.data.map((u) => ({
       id: u.id,
       email: u.emailAddresses[0]?.emailAddress ?? "",
@@ -62681,8 +62680,7 @@ router5.post("/admin/clerk-users/:clerkId/tier", requireAdmin, async (req, res) 
     return;
   }
   try {
-    const client = await clerkClient();
-    await client.users.updateUserMetadata(clerkId, { publicMetadata: { tier } });
+    await clerkClient.users.updateUserMetadata(clerkId, { publicMetadata: { tier } });
     res.json({ ok: true, clerkId, tier });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to update tier";

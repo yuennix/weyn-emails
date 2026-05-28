@@ -11,8 +11,7 @@ router.get("/admin/webhook-logs", checkAdminPassword, (_req, res): void => {
 
 router.get("/admin/clerk-users", checkAdminPassword, async (_req, res): Promise<void> => {
   try {
-    const client = await clerkClient();
-    const response = await client.users.getUserList({ limit: 100 });
+    const response = await clerkClient.users.getUserList({ limit: 100 });
     const users = response.data.map((u) => ({
       id: u.id,
       email: u.emailAddresses[0]?.emailAddress ?? "",
@@ -37,8 +36,7 @@ router.post("/admin/clerk-users/:clerkId/tier", checkAdminPassword, async (req, 
     return;
   }
   try {
-    const client = await clerkClient();
-    await client.users.updateUserMetadata(clerkId, { publicMetadata: { tier } });
+    await clerkClient.users.updateUserMetadata(clerkId, { publicMetadata: { tier } });
     res.json({ ok: true, clerkId, tier });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to update tier";
