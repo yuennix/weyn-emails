@@ -134,4 +134,53 @@
     background: linear-gradient(135deg, #818cf8 0%, #8b5cf6 100%);
     box-shadow: 0 6px 20px hsl(245 75% 65% / 0.4), 0 1px 3px hsl(245 75% 65% / 0.3);
   }
+
+  /* ── Red-black animated gradient ── */
+  @keyframes grad-shift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .grad-animated {
+    background: linear-gradient(270deg, #0a0000, #1a0000, #7f0000, #dc2626, #7f0000, #1a0000, #0a0000);
+    background-size: 400% 400%;
+    animation: grad-shift 6s ease infinite;
+  }
+
+  .grad-animated-border {
+    position: relative;
+  }
+  .grad-animated-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(270deg, #dc2626, #7f0000, #dc2626);
+    background-size: 300% 300%;
+    animation: grad-shift 4s ease infinite;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  .grad-text-red {
+    background: linear-gradient(270deg, #ff4444, #dc2626, #ff6666, #dc2626, #ff4444);
+    background-size: 300% 300%;
+    animation: grad-shift 4s ease infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glow-red {
+    box-shadow: 0 0 20px rgba(220,38,38,0.35), 0 0 60px rgba(220,38,38,0.12);
+  }
+
+  .glow-red-sm {
+    box-shadow: 0 0 10px rgba(220,38,38,0.25);
+  }
 }
