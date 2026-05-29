@@ -921,7 +921,7 @@ function AdminWebmailPanel() {
 
 /* ─── Admin Page ──────────────────────────────────────────── */
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === "1");
+  const [authed, setAuthed] = useState(() => localStorage.getItem(SESSION_KEY) === "1");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
@@ -930,7 +930,7 @@ export default function AdminPage() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem(SESSION_KEY, "1");
+      localStorage.setItem(SESSION_KEY, "1");
       setAuthed(true);
       setError("");
     } else {
@@ -1008,7 +1008,7 @@ export default function AdminPage() {
           </div>
         </div>
         <button
-          onClick={() => { sessionStorage.removeItem(SESSION_KEY); setAuthed(false); setPassword(""); }}
+          onClick={() => { localStorage.removeItem(SESSION_KEY); setAuthed(false); setPassword(""); }}
           className="text-sm text-muted-foreground hover:text-white border border-border hover:border-white/20 rounded-xl px-4 py-2 transition-all"
         >
           Sign out
